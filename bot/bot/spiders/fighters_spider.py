@@ -86,60 +86,6 @@ class FightersSpider(scrapy.Spider):
             if nickname != "N/A":
                 ret["nickname"] = nickname
 
-        # Pro MMA record
-        pro_mma_record = details.xpath(
-            "./ul/li/strong[text()='Pro MMA Record:']/parent::li/span/text()"
-        ).get()
-        if pro_mma_record is not None:
-            pro_mma_record = pro_mma_record.strip()
-            if pro_mma_record != "N/A":
-                record = ""
-                nc = 0
-                split = pro_mma_record.split(",")
-                valid = True
-                if len(split) == 1:
-                    # Does not have NC count
-                    # e.g: "31-5-0 (Win-Loss-Draw)"
-                    record = pro_mma_record.split(" ")[0]
-                elif len(split) == 2:
-                    # Has NC count
-                    # e.g: "31-5-0, 1 NC (Win-Loss-Draw)"
-                    record = split[0]
-                    nc = int(split[1].strip().split(" ")[0])
-                else:
-                    valid = False
-                if valid:
-                    split = record.strip().split("-")
-                    if len(split) == 3:
-                        w, l, d = split
-                        ret["pro_mma_record"] = {
-                            "W": int(w),
-                            "L": int(l),
-                            "D": int(d),
-                            "NC": nc,
-                        }
-
-        # Current streak
-        # e.g 1 Loss, 2 Losses, 1 Win, 2 Wins (No draw streaks)
-        streak = details.xpath(
-            "./ul/li/strong[text()='Current Streak:']/parent::li/span/text()"
-        ).get()
-        if streak is not None:
-            streak = streak.strip()
-            split = streak.split(" ")
-            if len(split) == 2:
-                count = int(split[0].strip())
-                result = split[1].strip()
-                valid = True
-                if result.startswith("W"):
-                    result = "W"
-                elif result.startswith("L"):
-                    result = "L"
-                else:
-                    valid = False
-                if valid:
-                    ret["streak"] = (count, result)
-
         # Age & Date of birth
         age_and_birth = details.xpath(
             "./ul/li/strong[text()='Age:']/parent::li[count(span)=2]/span/text()"
