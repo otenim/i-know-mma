@@ -58,7 +58,6 @@ class FightersSpider(scrapy.Spider):
         ret["id"] = int(fighter_id)
 
         # Fill details
-        ret["details"] = {}
         details = response.xpath("//div[@class='details details_two_columns']")
 
         # Name
@@ -72,11 +71,11 @@ class FightersSpider(scrapy.Spider):
                 if len(split) == 1:
                     # Has single name notation
                     # e.g: "Conor Anthony McGregor"
-                    ret["details"]["name"] = name
+                    ret["name"] = name
                 elif len(split) == 2:
                     # Has double name notations
                     # e.g: "정찬성, Jung Chan Sung"
-                    ret["details"]["name"] = split[-1].strip()
+                    ret["name"] = split[-1].strip()
 
         # Nickname
         nickname = details.xpath(
@@ -85,7 +84,7 @@ class FightersSpider(scrapy.Spider):
         if nickname is not None:
             nickname = nickname.strip()
             if nickname != "N/A":
-                ret["details"]["nickname"] = nickname
+                ret["nickname"] = nickname
 
         # Pro MMA record
         pro_mma_record = details.xpath(
@@ -113,7 +112,7 @@ class FightersSpider(scrapy.Spider):
                     split = record.strip().split("-")
                     if len(split) == 3:
                         w, l, d = split
-                        ret["details"]["pro_mma_record"] = {
+                        ret["pro_mma_record"] = {
                             "W": int(w),
                             "L": int(l),
                             "D": int(d),
@@ -139,7 +138,22 @@ class FightersSpider(scrapy.Spider):
                 else:
                     valid = False
                 if valid:
-                    ret["details"]["streak"] = (count, result)
+                    ret["streak"] = (count, result)
+
+        # Age & Date of birth
+        age_and_birth = details.xpath(
+            "./ul/li/strong[text()='Age:']/parent::li[count(span)=2]/span/text()"
+        ).getall()
+        if len(age_and_birth) == 2:
+            age = int(age_and_birth[0].strip())
+            birth = age_and_birth[1].strip()
+            split = birth.split(".")
+            if len(split) == 3:
+                y = int(split[0].strip())
+                m = int(split[1].strip())
+                d = int(split[2].strip())
+                ret["age"] = age
+                ret["birth"] = (y, m, d)
 
         # Return fighter record
         return ret
