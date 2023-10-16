@@ -1,4 +1,4 @@
-# Scrapy settings for bot project
+# Scrapy settings for tapology project
 #
 # For simplicity, this file contains only settings considered important or
 # commonly used. You can find more settings consulting the documentation:
@@ -6,13 +6,13 @@
 #     https://docs.scrapy.org/en/latest/topics/settings.html
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
-BOT_NAME = "bot"
+BOT_NAME = "tapology"
 
-SPIDER_MODULES = ["bot.spiders"]
-NEWSPIDER_MODULE = "bot.spiders"
+SPIDER_MODULES = ["tapology.spiders"]
+NEWSPIDER_MODULE = "tapology.spiders"
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
-# USER_AGENT = "bot (+http://www.yourdomain.com)"
+# USER_AGENT = "tapology (+http://www.yourdomain.com)"
 
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = True
@@ -43,12 +43,12 @@ DOWNLOAD_DELAY = 6
 # Enable or disable spider middlewares
 # See https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 # SPIDER_MIDDLEWARES = {
-#    "bot.middlewares.BotSpiderMiddleware": 543,
+#    "tapology.middlewares.TapologySpiderMiddleware": 543,
 # }
 
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-DOWNLOADER_MIDDLEWARES = {}
+# DOWNLOADER_MIDDLEWARES = {}
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
@@ -59,7 +59,7 @@ DOWNLOADER_MIDDLEWARES = {}
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 # ITEM_PIPELINES = {
-#    "bot.pipelines.BotPipeline": 300,
+#    "tapology.pipelines.TapologyPipeline": 300,
 # }
 
 # Enable and configure the AutoThrottle extension (disabled by default)
@@ -75,12 +75,53 @@ DOWNLOADER_MIDDLEWARES = {}
 # Enable showing throttling stats for every response received:
 # AUTOTHROTTLE_DEBUG = False
 
+# Compression
+COMPRESSION_ENABLED = True
+
 # Enable and configure HTTP caching (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
-# HTTPCACHE_ENABLED = True
-# HTTPCACHE_EXPIRATION_SECS = 0
+HTTPCACHE_ENABLED = True
+HTTPCACHE_EXPIRATION_SECS = 60 * 60 * 24
+HTTPCACHE_IGNORE_HTTP_CODES = [
+    400,  # Bad Request
+    401,  # Unauthorized
+    402,  # Payment Required
+    403,  # Forbidden
+    404,  # Not Found
+    405,  # Method Not Allowed
+    406,  # Not Acceptable
+    407,  # Proxy Authentication Required
+    408,  # Request Timeout
+    409,  # Conflict
+    410,  # Gone
+    411,  # Length Required
+    412,  # Precondition Failed
+    413,  # Payload Too Large
+    414,  # URI Too Long
+    415,  # Unsupported Media Type
+    416,  # Range Not Satisfiable
+    417,  # Expectation Failed
+    418,  # I’m a teapo
+    421,  # Misdirected Request
+    425,  # Too Early
+    426,  # Upgrade Required
+    428,  # Precondition Required
+    429,  # Too Many Requests
+    431,  # Request Header Fields Too Large
+    451,  # Unavailable For Legal Reasons
+    500,  # Internal Server Error
+    501,  # Not Implemented
+    502,  # Bad Gateway
+    503,  # Service Unavailable
+    504,  # Gateway Timeout
+    505,  # Version Not Supported
+    506,  # Variant Also Negotiates
+    507,  # Insufficient Storage (WebDAV)
+    508,  # Loop Detected (WebDAV)
+    510,  # Not Extended
+    511,  # Network Authentication Required
+]
 # HTTPCACHE_DIR = "httpcache"
-# HTTPCACHE_IGNORE_HTTP_CODES = []
 # HTTPCACHE_STORAGE = "scrapy.extensions.httpcache.FilesystemCacheStorage"
 
 # Set settings whose default value is deprecated to a future-proof value

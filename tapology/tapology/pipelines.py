@@ -8,6 +8,6 @@
 from itemadapter import ItemAdapter
 
 
-class BotPipeline:
+class TapologyPipeline:
     def process_item(self, item, spider):
         return item
