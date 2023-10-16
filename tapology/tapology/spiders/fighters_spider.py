@@ -54,70 +54,70 @@ class FightersSpider(scrapy.Spider):
             return
         ret["url"] = response.url
 
+        # Fighter name
+        name = response.xpath(
+            "//div[@class='fighterUpcomingHeader']/h1[not(@*)]/text()"
+        ).get()
+        assert name is not None
+        ret["name"] = name.strip()
+
+        # Fighter nickname
+        nickname = response.xpath(
+            "//div[@class='fighterUpcomingHeader']/h4[@class='preTitle nickname']/text()"
+        ).re_first(r"\"(.*)\"")
+        if nickname is not None:
+            ret["nickname"] = nickname.strip()
+
         # Parse details section
         details = response.xpath("//div[@class='details details_two_columns']")
 
-        # Name
-        name = details.xpath(
-            "./ul/li/strong[text()='Given Name:']/parent::li/span/text() | ./ul/li/strong[text()='Name:']/parent::li/span/text()"
-        ).get()
-        if name is not None:
-            name = name.strip()
-            if name != "N/A":
-                split = name.split(",")
-                if len(split) == 1:
-                    # Has single name notation
-                    # e.g: "Conor Anthony McGregor"
-                    ret["name"] = name
-                elif len(split) == 2:
-                    # Has double name notations
-                    # e.g: "정찬성, Jung Chan Sung"
-                    ret["name"] = split[-1].strip()
-
-        # Nickname
-        nickname = details.xpath(
-            "./ul/li/strong[text()='Nickname:']/parent::li/span/text()"
-        ).get()
-        if nickname is not None:
-            nickname = nickname.strip()
-            if nickname != "N/A":
-                ret["nickname"] = nickname
+        # Pro MMA record
+        pro_mma_record = details.xpath(
+            "./ul/li/strong[text()='Pro MMA Record:']/following-sibling::span[1]/text()"
+        ).re(r"(\d+)-(\d+)-(\d+)(?:,\s(\d+)\sNC)?")
+        if len(pro_mma_record) == 4:
+            ret["pro_mma_record"] = {
+                "w": int(pro_mma_record[0]),
+                "l": int(pro_mma_record[1]),
+                "d": int(pro_mma_record[2]),
+                "nc": 0 if pro_mma_record[3] == "" else int(pro_mma_record[3]),
+            }
 
         # Date of birth
         birth = details.xpath(
-            "./ul/li/strong[text()='| Date of Birth:']/parent::li/span[not(@*)]/text()"
+            "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()"
+        ).re(r"(\d{4})\.(\d{2}).(\d{2})")
+        if len(birth) == 3:
+            ret["birth"] = {"y": int(birth[0]), "m": int(birth[1]), "d": int(birth[2])}
+
+        # Weight class
+        weight_class = details.xpath(
+            "./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text()"
         ).get()
-        if birth is not None:
-            birth = birth.strip()
-            split = birth.split(".")
-            if len(split) == 3:
-                y = int(split[0].strip())
-                m = int(split[1].strip())
-                d = int(split[2].strip())
-                ret["birth"] = (y, m, d)
+        assert weight_class is not None
+        weight_class = weight_class.strip()
+        assert weight_class != "N/A"
+        ret["weight_class"] = weight_class
 
         # Affiliation
         affili = details.xpath(
-            "./ul/li/strong[text()='Affiliation:']/parent::li/span/a"
+            "./ul/li/strong[text()='Affiliation:']/following-sibling::span[1]/a"
         )
         if len(affili) == 1:
-            affili_url = affili.xpath("./@href").get()
-            if affili_url is not None:
-                affili_url = affili_url.strip()
-                affili_id = int(affili_url.split("/")[-1].split("-")[0])
-                affili_name = affili.xpath("./text()").get()
-                if affili_name is not None:
-                    affili_name = affili_name.strip()
+            url = affili.xpath("./@href").get()
+            if url is not None:
+                name = affili.xpath("./text()").get()
+                if name is not None:
                     ret["affiliation"] = {
-                        "url": affili_url,
-                        "name": affili_name,
+                        "url": url.strip(),
+                        "name": name.strip(),
                     }
 
         # Height
         # e.g: "5\'9\" (175cm)"
         height = details.xpath(
             "./ul/li/strong[text()='Height:']/following-sibling::span[1]/text()"
-        ).re(r"([0-9\.]+)\'([0-9\.]+)\"")
+        ).re(r"([\d\.]+)\'([\d\.]+)\"")
         if len(height) == 2:
             feet, inch = height
             ret["height"] = float(feet) * 0.3048 + float(inch) * 0.0254
@@ -126,20 +126,22 @@ class FightersSpider(scrapy.Spider):
         # e.g: "74.0\" (188cm)"
         reach = details.xpath(
             "./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text()"
-        ).re(r"([0-9\.]+)\"")
+        ).re(r"([\d\.]+)\"")
         if len(reach) == 1:
-            ret["reach"] = float(reach[0]) * 0.0254
+            inch = reach[0]
+            ret["reach"] = float(inch) * 0.0254
 
         # Career disclosed earnings
+        # e.g: "$193,000 USD", "$0 USD"
         earns = details.xpath(
-            "./ul/li/strong[text()='Career Disclosed Earnings:']/parent::li/span/text()"
-        ).re(r"\$([0-9,]+)\s*USD")
+            "./ul/li/strong[text()='Career Disclosed Earnings:']/following-sibling::span[1]/text()"
+        ).re(r"\$([\d,]+)\sUSD")
         if len(earns) == 1:
             ret["earnings"] = int(earns[0].replace(",", ""))
 
         # Born
         born = details.xpath(
-            "./ul/li/strong[text()='Born:']/parent::li/span/text()"
+            "./ul/li/strong[text()='Born:']/following-sibling::span[1]/text()"
         ).get()
         if born is not None:
             born = born.strip()
@@ -151,7 +153,7 @@ class FightersSpider(scrapy.Spider):
 
         # Fighting out of
         out_of = details.xpath(
-            "./ul/li/strong[text()='Fighting out of:']/parent::li/span/text()"
+            "./ul/li/strong[text()='Fighting out of:']/following-sibling::span[1]/text()"
         ).get()
         if out_of is not None:
             out_of = out_of.strip()
@@ -163,7 +165,7 @@ class FightersSpider(scrapy.Spider):
 
         # College
         college = details.xpath(
-            "./ul/li/strong[text()='College:']/parent::li/span/text()"
+            "./ul/li/strong[text()='College:']/following-sibling::span[1]/text()"
         ).get()
         if college is not None:
             college = college.strip()
@@ -172,7 +174,7 @@ class FightersSpider(scrapy.Spider):
 
         # Backbones
         backbones = details.xpath(
-            "./ul/li/strong[text()='Foundation Style:']/parent::li/span/text()"
+            "./ul/li/strong[text()='Foundation Style:']/following-sibling::span[1]/text()"
         ).get()
         if backbones is not None:
             backbones = backbones.strip()
@@ -181,5 +183,83 @@ class FightersSpider(scrapy.Spider):
                 for b in backbones.split(","):
                     v.append(b.strip())
                 ret["backbones"] = v
+
+        # Head Coach
+        head_coach = details.xpath(
+            "./ul/li/strong[text()='Head Coach:']/following-sibling::span[1]/text()"
+        ).get()
+        if head_coach is not None:
+            head_coach = head_coach.strip()
+            if head_coach != "N/A":
+                ret["head_coach"] = head_coach
+
+        # Other Coaches
+        other_coaches = details.xpath(
+            "./ul/li/strong[text()='Other Coaches:']/following-sibling::span[1]/text()"
+        ).get()
+        if other_coaches is not None:
+            other_coaches = other_coaches.strip()
+            if other_coaches != "N/A":
+                v = []
+                for c in other_coaches.split(","):
+                    v.append(c.strip())
+                ret["other_coaches"] = v
+
+        # Pro MMA stats
+        stats = response.xpath(
+            "//ul[@class='fighterRecordStats']/li/div[@class='label']"
+        )
+        if len(stats) > 0:
+            ret["pro_mma_stats"] = {}
+            for s in stats:
+                # Label (KO/TKO, Submission, Decision, Disqualification)
+                label = s.xpath("./div[@class='primary']/text()").get()
+                assert label is not None
+                label = label.strip()
+
+                # Count (win & loss)
+                count = s.xpath("./div[@class='secondary']/text()").re(
+                    r"(\d+)\s(?:wins|win),\s(\d+)\s(?:losses|loss)"
+                )
+                assert len(count) == 2
+                ret["pro_mma_stats"][label] = {
+                    "w": int(count[0].strip()),
+                    "l": int(count[1].strip()),
+                }
+
+        # # Pro MMA results
+        # matches = details.xpath(
+        #     "//section[@class='fighterFightResults']/ul[@id='proResults']/li[@data-sport='mma']"
+        # )
+        # if len(matches) > 0:
+        #     for match in matches:
+        #         # Overview
+        #         overview = match.xpath("./div[@class='result']")
+        #         assert len(overview) == 1
+
+        #         # Opponent
+        #         opponent = overview.xpath(
+        #             "./div[@class='opponent']/div[@class='name']/a"
+        #         )
+        #         assert len(opponent) == 1
+        #         opponent_name = opponent.xpath("./text()").get()
+        #         opponent_url = opponent.xpath("./@href").get()
+        #         assert opponent_name is not None and opponent_url is not None
+
+        #         # Record (before fight)
+        #         record = opponent.xpath("./div[@class='record']")
+        #         assert len(record) == 1
+        #         fighter_record = record.xpath(
+        #             "./span[@title='Fighter Record Before Fight']/text()"
+        #         ).get()
+        #         opponent_record = record.xpath(
+        #             "./span[@title='Opponent Record Before Fight']/text()"
+        #         ).get()
+        #         assert fighter_record is not None and opponent_record is not None
+
+        #         # Summary
+        #         summary = overview.xpath("./div[@class='summary']")
+        #         assert len(summary) == 1
+        #         result = summary.xpath("./div[@class='lead']/text()")
 
         return ret
