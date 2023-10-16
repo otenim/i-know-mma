@@ -49,15 +49,12 @@ class FightersSpider(scrapy.Spider):
     def parse_fighter(self, response: TextResponse):
         ret = {}
 
-        # Get fighter id
+        # Fighter url
         if response.url is None:
             return
-        fighter_id = response.url.split("/")[-1].split("-")[0]
-        if not fighter_id.isnumeric():
-            return
-        ret["id"] = int(fighter_id)
+        ret["url"] = response.url
 
-        # Fill details
+        # Parse details section
         details = response.xpath("//div[@class='details details_two_columns']")
 
         # Name
@@ -86,20 +83,103 @@ class FightersSpider(scrapy.Spider):
             if nickname != "N/A":
                 ret["nickname"] = nickname
 
-        # Age & Date of birth
-        age_and_birth = details.xpath(
-            "./ul/li/strong[text()='Age:']/parent::li[count(span)=2]/span/text()"
-        ).getall()
-        if len(age_and_birth) == 2:
-            age = int(age_and_birth[0].strip())
-            birth = age_and_birth[1].strip()
+        # Date of birth
+        birth = details.xpath(
+            "./ul/li/strong[text()='| Date of Birth:']/parent::li/span[not(@*)]/text()"
+        ).get()
+        if birth is not None:
+            birth = birth.strip()
             split = birth.split(".")
             if len(split) == 3:
                 y = int(split[0].strip())
                 m = int(split[1].strip())
                 d = int(split[2].strip())
-                ret["age"] = age
                 ret["birth"] = (y, m, d)
 
-        # Return fighter record
+        # Affiliation
+        affili = details.xpath(
+            "./ul/li/strong[text()='Affiliation:']/parent::li/span/a"
+        )
+        if len(affili) == 1:
+            affili_url = affili.xpath("./@href").get()
+            if affili_url is not None:
+                affili_url = affili_url.strip()
+                affili_id = int(affili_url.split("/")[-1].split("-")[0])
+                affili_name = affili.xpath("./text()").get()
+                if affili_name is not None:
+                    affili_name = affili_name.strip()
+                    ret["affiliation"] = {
+                        "url": affili_url,
+                        "name": affili_name,
+                    }
+
+        # Height
+        # e.g: "5\'9\" (175cm)"
+        height = details.xpath(
+            "./ul/li/strong[text()='Height:']/following-sibling::span[1]/text()"
+        ).re(r"([0-9\.]+)\'([0-9\.]+)\"")
+        if len(height) == 2:
+            feet, inch = height
+            ret["height"] = float(feet) * 0.3048 + float(inch) * 0.0254
+
+        # Reach
+        # e.g: "74.0\" (188cm)"
+        reach = details.xpath(
+            "./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text()"
+        ).re(r"([0-9\.]+)\"")
+        if len(reach) == 1:
+            ret["reach"] = float(reach[0]) * 0.0254
+
+        # Career disclosed earnings
+        earns = details.xpath(
+            "./ul/li/strong[text()='Career Disclosed Earnings:']/parent::li/span/text()"
+        ).re(r"\$([0-9,]+)\s*USD")
+        if len(earns) == 1:
+            ret["earnings"] = int(earns[0].replace(",", ""))
+
+        # Born
+        born = details.xpath(
+            "./ul/li/strong[text()='Born:']/parent::li/span/text()"
+        ).get()
+        if born is not None:
+            born = born.strip()
+            if born != "N/A":
+                v = []
+                for b in born.split(","):
+                    v.append(b.strip())
+                ret["born"] = v
+
+        # Fighting out of
+        out_of = details.xpath(
+            "./ul/li/strong[text()='Fighting out of:']/parent::li/span/text()"
+        ).get()
+        if out_of is not None:
+            out_of = out_of.strip()
+            if out_of != "N/A":
+                v = []
+                for o in out_of.split(","):
+                    v.append(o.strip())
+                ret["out_of"] = v
+
+        # College
+        college = details.xpath(
+            "./ul/li/strong[text()='College:']/parent::li/span/text()"
+        ).get()
+        if college is not None:
+            college = college.strip()
+            if college != "N/A":
+                ret["college"] = college
+
+        # Backbones
+        backbones = details.xpath(
+            "./ul/li/strong[text()='Foundation Style:']/parent::li/span/text()"
+        ).get()
+        if backbones is not None:
+            backbones = backbones.strip()
+            if backbones != "N/A":
+                v = []
+                for b in backbones.split(","):
+                    v.append(b.strip())
+                ret["backbones"] = v
+
         return ret
