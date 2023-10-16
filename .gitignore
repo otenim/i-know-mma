@@ -1,3 +1,2 @@
 *.json
-!proxies.json
 __pycache__/
