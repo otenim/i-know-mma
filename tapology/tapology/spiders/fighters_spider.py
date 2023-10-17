@@ -236,6 +236,22 @@ class FightersSpider(scrapy.Spider):
         for result in pro_results:
             record = {}
 
+            # Sport
+            # e.g: "mma", "kickboxing", "muay"
+            # ""
+            sport = result.xpath("./@data-sport").get()
+            assert sport is not None and sport in [
+                "mma",
+                "boxing",
+                "kickboxing",
+                "muay",
+                "lethwei",
+                "grappling",
+                "shootboxing",
+                "custom",
+            ]
+            record["sport"] = sport.strip()
+
             # Status (loss, win, cancelled, draw, no contest)
             status = result.xpath("./@data-status").get()
             assert status is not None and status in [
@@ -244,17 +260,20 @@ class FightersSpider(scrapy.Spider):
                 "cancelled",
                 "draw",
                 "no contest",
+                "unknown",
             ]
             if status == "win":
                 record["status"] = "w"
             elif status == "loss":
                 record["status"] = "l"
-            elif status == "cancelled":
-                record["status"] = "c"
+            elif status == "draw":
+                record["status"] = "d"
             elif status == "no contest":
                 record["status"] = "nc"
-            else:  # "draw"
-                record["status"] = "d"
+            elif status == "cancelled":
+                record["status"] = "cancelled"
+            else:  # unknown
+                record["status"] = "unknown"
 
             # Opponent
             opponent = result.xpath("./div[@class='result']/div[@class='opponent']")
@@ -278,6 +297,29 @@ class FightersSpider(scrapy.Spider):
                 opponent_name = opponent.xpath("./div[@class='name']/span/text()").get()
                 assert opponent_name is not None
                 record["opponent"] = {"name": opponent_name.strip()}
+
+            # Record before the fight
+            # NOTE: only available when the match is mma and was not cancelled
+            if sport == "mma" and status != "cancelled":
+                rec = opponent.xpath("./div[@class='record']")
+                fighter_rec = rec.xpath(
+                    "./span[@title='Fighter Record Before Fight']/text()"
+                ).re(r"(\d+)-(\d+)-(\d+)")
+                opponent_rec = rec.xpath(
+                    "./span[@title='Opponent Record Before Fight']/text()"
+                ).re(r"(\d+)-(\d+)-(\d+)")
+                assert len(fighter_rec) == 3
+                assert len(opponent_rec) == 3
+                record["record"] = {
+                    "w": int(fighter_rec[0].strip()),
+                    "l": int(fighter_rec[1].strip()),
+                    "d": int(fighter_rec[2].strip()),
+                }
+                record["opponent"]["record"] = {
+                    "w": int(opponent_rec[0].strip()),
+                    "l": int(opponent_rec[1].strip()),
+                    "d": int(opponent_rec[2].strip()),
+                }
 
             ret["pro_results"].append(record)
 
