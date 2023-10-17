@@ -227,39 +227,58 @@ class FightersSpider(scrapy.Spider):
                     "l": int(count[1].strip()),
                 }
 
-        # # Pro MMA results
-        # matches = details.xpath(
-        #     "//section[@class='fighterFightResults']/ul[@id='proResults']/li[@data-sport='mma']"
-        # )
-        # if len(matches) > 0:
-        #     for match in matches:
-        #         # Overview
-        #         overview = match.xpath("./div[@class='result']")
-        #         assert len(overview) == 1
+        # Pro MMA results
+        pro_results = details.xpath(
+            "//section[@class='fighterFightResults']/ul[@id='proResults']/li"
+        )
+        assert len(pro_results) > 0
+        ret["pro_results"] = []
+        for result in pro_results:
+            record = {}
 
-        #         # Opponent
-        #         opponent = overview.xpath(
-        #             "./div[@class='opponent']/div[@class='name']/a"
-        #         )
-        #         assert len(opponent) == 1
-        #         opponent_name = opponent.xpath("./text()").get()
-        #         opponent_url = opponent.xpath("./@href").get()
-        #         assert opponent_name is not None and opponent_url is not None
+            # Status (loss, win, cancelled, draw, no contest)
+            status = result.xpath("./@data-status").get()
+            assert status is not None and status in [
+                "loss",
+                "win",
+                "cancelled",
+                "draw",
+                "no contest",
+            ]
+            if status == "win":
+                record["status"] = "w"
+            elif status == "loss":
+                record["status"] = "l"
+            elif status == "cancelled":
+                record["status"] = "c"
+            elif status == "no contest":
+                record["status"] = "nc"
+            else:  # "draw"
+                record["status"] = "d"
 
-        #         # Record (before fight)
-        #         record = opponent.xpath("./div[@class='record']")
-        #         assert len(record) == 1
-        #         fighter_record = record.xpath(
-        #             "./span[@title='Fighter Record Before Fight']/text()"
-        #         ).get()
-        #         opponent_record = record.xpath(
-        #             "./span[@title='Opponent Record Before Fight']/text()"
-        #         ).get()
-        #         assert fighter_record is not None and opponent_record is not None
+            # Opponent
+            opponent = result.xpath("./div[@class='result']/div[@class='opponent']")
+            assert len(opponent) == 1
 
-        #         # Summary
-        #         summary = overview.xpath("./div[@class='summary']")
-        #         assert len(summary) == 1
-        #         result = summary.xpath("./div[@class='lead']/text()")
+            # Opponent name
+            name = opponent.xpath("./div[@class='name']/a")
+            # Check if the section has a link to the opponent
+            has_opponent_link = False if len(name) == 0 else True
+            if has_opponent_link:
+                opponent_link = name.xpath("./@href").get()
+                opponent_name = name.xpath("./text()").get()
+                assert opponent_link is not None and opponent_name is not None
+                record["opponent"] = {
+                    "name": opponent_name.strip(),
+                    "url": opponent_link.strip(),
+                }
+            else:
+                # NOTE: Opponent name is included in <span></span> tags if
+                # it does not have a link
+                opponent_name = opponent.xpath("./div[@class='name']/span/text()").get()
+                assert opponent_name is not None
+                record["opponent"] = {"name": opponent_name.strip()}
+
+            ret["pro_results"].append(record)
 
         return ret
