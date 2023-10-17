@@ -172,17 +172,17 @@ class FightersSpider(scrapy.Spider):
             if college != "N/A":
                 ret["college"] = college
 
-        # Backbones
-        backbones = details.xpath(
+        # Foundations
+        foundations = details.xpath(
             "./ul/li/strong[text()='Foundation Style:']/following-sibling::span[1]/text()"
         ).get()
-        if backbones is not None:
-            backbones = backbones.strip()
-            if backbones != "N/A":
+        if foundations is not None:
+            foundations = foundations.strip()
+            if foundations != "N/A":
                 v = []
-                for b in backbones.split(","):
+                for b in foundations.split(","):
                     v.append(b.strip())
-                ret["backbones"] = v
+                ret["foundations"] = v
 
         # Head Coach
         head_coach = details.xpath(
