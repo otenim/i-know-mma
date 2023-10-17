@@ -213,7 +213,7 @@ class FightersSpider(scrapy.Spider):
             ret["pro_mma_stats"] = {}
             for s in stats:
                 # Label (KO/TKO, Submission, Decision, Disqualification)
-                label = s.xpath("./div[@class='primary']/text()").get()
+                label = s.xpath("./div[starts-with(@class,'primary')]/text()").get()
                 assert label is not None
                 label = label.strip()
 
@@ -222,7 +222,7 @@ class FightersSpider(scrapy.Spider):
                     r"(\d+)\s(?:wins|win),\s(\d+)\s(?:losses|loss)"
                 )
                 assert len(count) == 2
-                ret["pro_mma_stats"][label] = {
+                ret["pro_mma_stats"][label.lower()] = {
                     "w": int(count[0].strip()),
                     "l": int(count[1].strip()),
                 }
