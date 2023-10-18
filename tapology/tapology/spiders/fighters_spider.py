@@ -256,9 +256,11 @@ class FightersSpider(scrapy.Spider):
                     "knuckle",
                     "kickboxing",
                     "muay",
+                    "sanda",
                     "lethwei",
                     "grappling",
                     "shootboxing",
+                    "wrestling",
                     "custom",
                 ]
                 item["genre"] = bout_genre.strip()
