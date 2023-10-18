@@ -252,13 +252,16 @@ class FightersSpider(scrapy.Spider):
             ]
             record["sport"] = sport.strip()
 
-            # Status (loss, win, cancelled, draw, no contest)
+            # Status
+            # e.g: loss, win, cancelled, draw, no contest, unknown, upcoming
+            # NOTE: Skip upcoming bouts
             status = result.xpath("./@data-status").get()
             assert status is not None and status in [
                 "loss",
                 "win",
                 "cancelled",
                 "draw",
+                "upcoming",
                 "no contest",
                 "unknown",
             ]
@@ -272,8 +275,10 @@ class FightersSpider(scrapy.Spider):
                 record["status"] = "nc"
             elif status == "cancelled":
                 record["status"] = "cancelled"
-            else:  # unknown
+            elif status == "unknown":
                 record["status"] = "unknown"
+            else:
+                continue
 
             # Opponent
             opponent = result.xpath("./div[@class='result']/div[@class='opponent']")
@@ -305,21 +310,24 @@ class FightersSpider(scrapy.Spider):
                 fighter_rec = rec.xpath(
                     "./span[@title='Fighter Record Before Fight']/text()"
                 ).re(r"(\d+)-(\d+)-(\d+)")
-                opponent_rec = rec.xpath(
-                    "./span[@title='Opponent Record Before Fight']/text()"
-                ).re(r"(\d+)-(\d+)-(\d+)")
                 assert len(fighter_rec) == 3
-                assert len(opponent_rec) == 3
                 record["record"] = {
                     "w": int(fighter_rec[0].strip()),
                     "l": int(fighter_rec[1].strip()),
                     "d": int(fighter_rec[2].strip()),
                 }
-                record["opponent"]["record"] = {
-                    "w": int(opponent_rec[0].strip()),
-                    "l": int(opponent_rec[1].strip()),
-                    "d": int(opponent_rec[2].strip()),
-                }
+                # NOTE: Opponent record is provided
+                # only when the opponent link is provided
+                if has_opponent_link:
+                    opponent_rec = rec.xpath(
+                        "./span[@title='Opponent Record Before Fight']/text()"
+                    ).re(r"(\d+)-(\d+)-(\d+)")
+                    record["opponent"]["record"] = {
+                        "w": int(opponent_rec[0].strip()),
+                        "l": int(opponent_rec[1].strip()),
+                        "d": int(opponent_rec[2].strip()),
+                    }
+                    assert len(opponent_rec) == 3
 
             ret["pro_results"].append(record)
 
