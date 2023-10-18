@@ -236,13 +236,21 @@ class FightersSpider(scrapy.Spider):
         for result in pro_results:
             record = {}
 
-            # Sport
-            # e.g: "mma", "kickboxing", "muay"
-            # ""
-            sport = result.xpath("./@data-sport").get()
-            assert sport is not None and sport in [
+            # Skip ineligible mma bouts
+            txt = result.xpath(
+                "./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text()"
+            ).get()
+            if txt is not None:
+                txt = txt.strip()
+                if txt == "Record Ineligible MMA":
+                    continue
+
+            # Bout type
+            bout_type = result.xpath("./@data-sport").get()
+            assert bout_type is not None and bout_type in [
                 "mma",
                 "boxing",
+                "knuckle",
                 "kickboxing",
                 "muay",
                 "lethwei",
@@ -250,13 +258,13 @@ class FightersSpider(scrapy.Spider):
                 "shootboxing",
                 "custom",
             ]
-            record["sport"] = sport.strip()
+            record["bout_type"] = bout_type.strip()
 
-            # Status
+            # Bout result
             # e.g: loss, win, cancelled, draw, no contest, unknown, upcoming
             # NOTE: Skip upcoming bouts
-            status = result.xpath("./@data-status").get()
-            assert status is not None and status in [
+            bout_result = result.xpath("./@data-status").get()
+            assert bout_result is not None and bout_result in [
                 "loss",
                 "win",
                 "cancelled",
@@ -265,18 +273,18 @@ class FightersSpider(scrapy.Spider):
                 "no contest",
                 "unknown",
             ]
-            if status == "win":
-                record["status"] = "w"
-            elif status == "loss":
-                record["status"] = "l"
-            elif status == "draw":
-                record["status"] = "d"
-            elif status == "no contest":
-                record["status"] = "nc"
-            elif status == "cancelled":
-                record["status"] = "cancelled"
-            elif status == "unknown":
-                record["status"] = "unknown"
+            if bout_result == "win":
+                record["bout_result"] = "w"
+            elif bout_result == "loss":
+                record["bout_result"] = "l"
+            elif bout_result == "draw":
+                record["bout_result"] = "d"
+            elif bout_result == "no contest":
+                record["bout_result"] = "nc"
+            elif bout_result == "cancelled":
+                record["bout_result"] = "cancelled"
+            elif bout_result == "unknown":
+                record["bout_result"] = "unknown"
             else:
                 continue
 
@@ -304,8 +312,11 @@ class FightersSpider(scrapy.Spider):
                 record["opponent"] = {"name": opponent_name.strip()}
 
             # Record before the fight
-            # NOTE: only available when the match is mma and was not cancelled
-            if sport == "mma" and status != "cancelled":
+            # NOTE: only available when the bout is official mma bout
+            # and was not cancelled
+            sels = opponent.xpath("./div[@class='record nonMma']")
+            is_official_mma_bout = True if len(sels) == 0 else False
+            if is_official_mma_bout and bout_result != "cancelled":
                 rec = opponent.xpath("./div[@class='record']")
                 fighter_rec = rec.xpath(
                     "./span[@title='Fighter Record Before Fight']/text()"
@@ -317,7 +328,7 @@ class FightersSpider(scrapy.Spider):
                     "d": int(fighter_rec[2].strip()),
                 }
                 # NOTE: Opponent record is provided
-                # only when the opponent link is provided
+                # when a link to the opponent page is provided
                 if has_opponent_link:
                     opponent_rec = rec.xpath(
                         "./span[@title='Opponent Record Before Fight']/text()"
