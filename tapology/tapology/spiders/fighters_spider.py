@@ -341,7 +341,7 @@ class FightersSpider(scrapy.Spider):
                         opponent_record = record_sel.xpath(
                             "./span[@title='Opponent Record Before Fight']/text()"
                         ).re(r"(\d+)-(\d+)-(\d+)")
-                        item["opponent"]["record"] = {
+                        item["opponent"]["record_before_fight"] = {
                             "w": int(opponent_record[0].strip()),
                             "l": int(opponent_record[1].strip()),
                             "d": int(opponent_record[2].strip()),
