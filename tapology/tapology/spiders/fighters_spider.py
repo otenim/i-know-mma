@@ -256,6 +256,7 @@ class FightersSpider(scrapy.Spider):
                     "knuckle",
                     "kickboxing",
                     "muay",
+                    "karate",
                     "sanda",
                     "lethwei",
                     "grappling",
