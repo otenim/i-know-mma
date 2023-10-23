@@ -274,7 +274,7 @@ class FightersSpider(scrapy.Spider):
                 elif status == "draw":
                     item["status"] = "d"
                 else:
-                    # NOTE: Skip cancelled, no-contest, status-unknown, and cancelled bout records
+                    # NOTE: Skip cancelled, no-contest, status-unknown, and upcoming records
                     continue
 
                 # Opponent fighter (must)
@@ -305,6 +305,7 @@ class FightersSpider(scrapy.Spider):
 
                 # Record before the fight
                 # NOTE: available when the bout is an official mma bout
+                # and was not cancelled
                 is_official_mma_bout = (
                     True
                     if len(opponent_section.xpath("./div[@class='record nonMma']")) == 0
@@ -336,119 +337,128 @@ class FightersSpider(scrapy.Spider):
                             }
 
                 # Bout summary
-                if item["status"] in ["w", "l"]:
+                # NOTE: Scrape only official mma bouts with result of win or lose
+                if is_official_mma_bout and item["status"] in ["w", "l"]:
                     summary_lead_section = pro_rec_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='lead']"
                     )
-                    if len(summary_lead_section) == 0:
-                        self.logger.error("No summary lead section is provided")
-                        continue
-                    txt = summary_lead_section.xpath("./a/text()").get()
-                    if not txt:
-                        # No links to the summary lead
-                        txt = summary_lead_section.xpath("./text()").get()
-                        if not txt:
+                    if len(summary_lead_section) == 1:
+                        lead = summary_lead_section.xpath("./a/text()").get()
+                        if not lead:
+                            # No links to the summary lead
+                            lead = summary_lead_section.xpath("./text()").get()
+                        if not lead:
                             self.logger.error("No summary lead text is provided")
-                    li = list(
-                        filter(
-                            lambda x: x != "",
-                            map(lambda x: x.strip(), txt.split("·")),
-                        )
-                    )
-                    n = len(li)
-                    if not (1 <= n <= 4):
-                        self.logger.error(f"Unexpected summary lead format: {txt}")
-                        continue
-
-                    # Parse summary lead
-                    if 2 <= n <= 4:
-                        item["details"] = {}
-                        if n == 2:
-                            # (Win|Loss), finish
-                            item["details"]["ended_by"] = {
-                                "type": infer(li[1]),
-                                "detail": li[1],
-                            }
-                        elif n == 3:
-                            # (Win|Loss), finish, round
-                            # (Win|Loss), Decision, (Majority|Unanimous|Split)
-                            t = infer(li[1])
-                            if t == "decision":
-                                item["details"]["ended_by"] = {
-                                    "type": t,
-                                    "detail": li[2],
-                                }
+                        else:
+                            l = list(
+                                filter(
+                                    lambda x: x != "",
+                                    map(lambda x: x.strip(), lead.split("·")),
+                                )
+                            )
+                            n = len(l)
+                            if not (1 <= n <= 4):
+                                self.logger.error(
+                                    f"Unexpected summary lead format: {lead}"
+                                )
                             else:
-                                item["details"]["ended_by"] = {
-                                    "type": t,
-                                    "detail": li[1],
-                                }
-                                r = parse_round(li[2])
-                                if r:
-                                    item["details"]["ended_at"] = {"round": r}
-                        else:
-                            # (Win|Loss), finish, time, round
-                            item["details"]["ended_by"] = {
-                                "type": infer(li[1]),
-                                "detail": li[1],
-                            }
-                            r, t = parse_round(li[3]), parse_time(li[2])
-                            if r or t:
-                                item["details"]["ended_at"] = {}
-                                if r:
-                                    item["details"]["ended_at"]["round"] = r
-                                if t:
-                                    item["details"]["ended_at"]["time"] = t
+                                # Parse summary lead
+                                if n != 1:
+                                    item["details"] = {}
+                                    if n == 2:
+                                        # (Win|Loss), finish
+                                        item["details"]["ended_by"] = {
+                                            "type": infer(l[1]),
+                                            "detail": l[1],
+                                        }
+                                    elif n == 3:
+                                        # (Win|Loss), finish, round
+                                        # (Win|Loss), Decision, (Majority|Unanimous|Split)
+                                        t = infer(l[1])
+                                        if t == "decision":
+                                            item["details"]["ended_by"] = {
+                                                "type": t,
+                                                "detail": l[2],
+                                            }
+                                        else:
+                                            item["details"]["ended_by"] = {
+                                                "type": t,
+                                                "detail": l[1],
+                                            }
+                                            r = parse_round(l[2])
+                                            if r:
+                                                item["details"]["ended_at"] = {
+                                                    "round": r
+                                                }
+                                    else:
+                                        # (Win|Loss), finish, time, round
+                                        item["details"]["ended_by"] = {
+                                            "type": infer(l[1]),
+                                            "detail": l[1],
+                                        }
+                                        r, t = parse_round(l[3]), parse_time(l[2])
+                                        if r or t:
+                                            item["details"]["ended_at"] = {}
+                                            if r:
+                                                item["details"]["ended_at"]["round"] = r
+                                            if t:
+                                                item["details"]["ended_at"]["time"] = t
 
-                # Bout deta
-                label_sections = pro_rec_section.xpath(
-                    "./div[@class='details tall']/div[@class='div']/span[@class='label']"
-                )
-                for label_section in label_sections:
-                    label = label_section.xpath("./text()").get()
-                    if not label:
-                        self.logger.error("No label text is provided")
-                        continue
-                    label = label.strip()
-                    if label == "Billing:":
-                        # "Main Event" or "Preliminary Card"
-                        billing = label_section.xpath(
-                            "./following-sibling::span[1]/text()"
-                        ).get()
-                        if billing:
-                            item["billing"] = billing.strip()
-                        else:
-                            self.logger.error("No text is provided for billing section")
-                    elif label == "Duration:":
-                        txt = label_section.xpath(
-                            "./following-sibling::span[1]/text()"
-                        ).get()
-                        if txt:
-                            duration = parse_duration(txt)
-                            if duration:
-                                item["duration"] = duration
+                # Bout details
+                # NOTE: Scrape only official mma bouts with result of win or lose
+                if is_official_mma_bout and item["status"] in ["w", "l"]:
+                    label_sections = pro_rec_section.xpath(
+                        "./div[@class='details tall']/div[@class='div']/span[@class='label']"
+                    )
+                    for label_section in label_sections:
+                        label = label_section.xpath("./text()").get()
+                        if not label:
+                            self.logger.error("No label text is provided")
+                            continue
+                        label = label.strip()
+                        if label == "Billing:":
+                            # "Main Event", "Main Card", "Preliminary Card"
+                            billing = label_section.xpath(
+                                "./following-sibling::span[1]/text()"
+                            ).get()
+                            if billing:
+                                item["billing"] = billing.strip()
                             else:
                                 self.logger.error(
-                                    f"Unexpected format of duration section: {txt}"
+                                    "No text is provided for billing section"
                                 )
-                        else:
-                            self.logger.error(
-                                "No text is provided for duration section"
-                            )
-                    elif label == "Referee:":
-                        referee = label_section.xpath(
-                            "./following-sibling::span[1]/text()"
-                        ).get()
-                        if referee:
-                            item["referee"] = referee.strip()
-                        else:
-                            self.logger.error("No text is provided for referee section")
-                    elif txt == "Weight:":
-                        # Lightweight · 154 lbs (70.0 kg)
-                        # Lightweight · 155 lbs (70.3 kg) · Weigh-In 155.0 lbs (70.3 kgs)
-                        # 57 kg · 57 kg (125.7 lbs)
-                        # 57 kg · 57 kg (125.0 lbs) · Weigh-In 124.7 lbs (56.6 kgs)
-                        pass
+                        elif label == "Duration:":
+                            txt = label_section.xpath(
+                                "./following-sibling::span[1]/text()"
+                            ).get()
+                            if txt:
+                                duration = parse_duration(txt)
+                                if duration:
+                                    item["duration"] = duration
+                                else:
+                                    self.logger.error(
+                                        f"Unexpected format of duration section: {txt}"
+                                    )
+                            else:
+                                self.logger.error(
+                                    f"No text is provided for duration section: {response.url}"
+                                )
+                        elif label == "Referee:":
+                            referee = label_section.xpath(
+                                "./following-sibling::span[1]/text()"
+                            ).get()
+                            if referee:
+                                item["referee"] = referee.strip()
+                            else:
+                                self.logger.error(
+                                    "No text is provided for referee section"
+                                )
+                        elif txt == "Weight:":
+                            # Lightweight · 154 lbs (70.0 kg)
+                            # Lightweight · 155 lbs (70.3 kg) · Weigh-In 155.0 lbs (70.3 kgs)
+                            # 57 kg · 57 kg (125.7 lbs)
+                            # 57 kg · 57 kg (125.0 lbs) · Weigh-In 124.7 lbs (56.6 kgs)
+                            pass
 
                 ret["pro_records"].append(item)
         return ret
