@@ -2,7 +2,7 @@ import scrapy
 import re
 from scrapy.http import Request, TextResponse
 from collections.abc import Generator
-from typing import Tuple, Union
+from typing import List, Union, Dict
 
 
 class FightersSpider(scrapy.Spider):
@@ -242,6 +242,7 @@ class FightersSpider(scrapy.Spider):
                     "grappling",
                     "shootboxing",
                     "wrestling",
+                    "sambo",
                     "custom",
                 ]:
                     self.logger.warning(f"Unrecognized sport was detected: {sport}")
@@ -360,88 +361,134 @@ class FightersSpider(scrapy.Spider):
                         continue
 
                     # Parse summary lead
-                    item["details"] = {}
-                    if n == 1:
-                        # (Win|Loss)
-                        continue
-                    elif n == 2:
-                        # (Win|Loss), finish
-                        item["details"]["ended_by"] = {
-                            "type": infer(li[1]),
-                            "detail": li[1],
-                        }
-                    elif n == 3:
-                        # (Win|Loss), finish, round
-                        # (Win|Loss), Decision, (Majority|Unanimous|Split)
-                        t = infer(li[1])
-                        if t == "decision":
-                            item["details"]["ended_by"] = {"type": t, "detail": li[2]}
-                        else:
+                    if 2 <= n <= 4:
+                        item["details"] = {}
+                        if n == 2:
+                            # (Win|Loss), finish
                             item["details"]["ended_by"] = {
-                                "type": t,
+                                "type": infer(li[1]),
                                 "detail": li[1],
                             }
-                            item["details"]["ended_at"] = {"round": parse_round(li[2])}
-                    else:
-                        # (Win|Loss), finish, time, round
-                        item["details"]["ended_by"] = {
-                            "type": infer(li[1]),
-                            "detail": li[1],
-                        }
-                        item["details"]["ended_at"] = {
-                            "round": parse_round(li[3]),
-                            "time": parse_time(li[2]),
-                        }
+                        elif n == 3:
+                            # (Win|Loss), finish, round
+                            # (Win|Loss), Decision, (Majority|Unanimous|Split)
+                            t = infer(li[1])
+                            if t == "decision":
+                                item["details"]["ended_by"] = {
+                                    "type": t,
+                                    "detail": li[2],
+                                }
+                            else:
+                                item["details"]["ended_by"] = {
+                                    "type": t,
+                                    "detail": li[1],
+                                }
+                                r = parse_round(li[2])
+                                if r:
+                                    item["details"]["ended_at"] = {"round": r}
+                        else:
+                            # (Win|Loss), finish, time, round
+                            item["details"]["ended_by"] = {
+                                "type": infer(li[1]),
+                                "detail": li[1],
+                            }
+                            r, t = parse_round(li[3]), parse_time(li[2])
+                            if r or t:
+                                item["details"]["ended_at"] = {}
+                                if r:
+                                    item["details"]["ended_at"]["round"] = r
+                                if t:
+                                    item["details"]["ended_at"]["time"] = t
 
-                # Bout details
-                # label_sels = pro_rec_section.xpath(
-                #     "./div[@class='details tall']/div[@class='div']/span[@class='label']"
-                # )
-                # for label_sel in label_sels:
-                #     txt = label_sel.xpath("./text()").get()
-                #     assert txt is not None
-                #     txt = txt.strip()
-                #     if txt == "Billing:":
-                #         bill = label_sel.xpath(
-                #             "./following-sibling::span[1]/text()"
-                #         ).get()
-                #         assert bill is not None
-                #         item["billing"] = bill.strip()
-                #     elif txt == "Duration:":
-                #         duration = label_sel.xpath(
-                #             "./following-sibling::span[1]/text()"
-                #         ).re(r"(\d+)\sx\s(\d+)")
-                #         if len(duration) == 2:
-                #             item["duration"] = duration
-                #     elif txt == "Referee:":
-                #         referee = label_sel.xpath(
-                #             "./following-sibling::span[1]/text()"
-                #         ).get()
-                #         assert referee is not None
-                #         item["referee"] = referee.strip()
-                #     elif txt == "Weight:":
-                #         # Lightweight · 154 lbs (70.0 kg)
-                #         # Lightweight · 155 lbs (70.3 kg) · Weigh-In 155.0 lbs (70.3 kgs)
-                #         # 57 kg · 57 kg (125.7 lbs)
-                #         # 57 kg · 57 kg (125.0 lbs) · Weigh-In 124.7 lbs (56.6 kgs)
-                #         pass
+                # Bout deta
+                label_sections = pro_rec_section.xpath(
+                    "./div[@class='details tall']/div[@class='div']/span[@class='label']"
+                )
+                for label_section in label_sections:
+                    label = label_section.xpath("./text()").get()
+                    if not label:
+                        self.logger.error("No label text is provided")
+                        continue
+                    label = label.strip()
+                    if label == "Billing:":
+                        # "Main Event" or "Preliminary Card"
+                        billing = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if billing:
+                            item["billing"] = billing.strip()
+                        else:
+                            self.logger.error("No text is provided for billing section")
+                    elif label == "Duration:":
+                        txt = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if txt:
+                            duration = parse_duration(txt)
+                            if duration:
+                                item["duration"] = duration
+                            else:
+                                self.logger.error(
+                                    f"Unexpected format of duration section: {txt}"
+                                )
+                        else:
+                            self.logger.error(
+                                "No text is provided for duration section"
+                            )
+                    elif label == "Referee:":
+                        referee = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if referee:
+                            item["referee"] = referee.strip()
+                        else:
+                            self.logger.error("No text is provided for referee section")
+                    elif txt == "Weight:":
+                        # Lightweight · 154 lbs (70.0 kg)
+                        # Lightweight · 155 lbs (70.3 kg) · Weigh-In 155.0 lbs (70.3 kgs)
+                        # 57 kg · 57 kg (125.7 lbs)
+                        # 57 kg · 57 kg (125.0 lbs) · Weigh-In 124.7 lbs (56.6 kgs)
+                        pass
 
                 ret["pro_records"].append(item)
         return ret
 
 
-def parse_time(time: str) -> Union[Tuple[int, int], None]:
-    out = re.match(r"^(\d+):(\d+)$", time.strip())
+def parse_time(txt: str) -> Union[Dict[str, int], None]:
+    out = re.match(r"^(\d+):(\d+)$", txt.strip())
     if out is None:
         return None
-    return (int(out.group(1)), int(out.group(2)))
+    return {"m": int(out.group(1)), "s": int(out.group(2))}
 
 
-def parse_round(round: str) -> Union[int, None]:
-    out = re.match(r"^R([1-9])$", round.strip())
+def parse_round(txt: str) -> Union[int, None]:
+    out = re.match(r"^R([1-9])$", txt.strip())
     if out is None:
         return None
     return int(out.group(1))
+
+
+def parse_duration(txt: str) -> Union[List[int], None]:
+    normed = txt.lower().strip()
+    out = re.match(r"(\d+)\sx\s(\d+) min", normed)
+    if out:
+        return [int(out.group(2))] * int(out.group(1))
+    out = re.match(r"(\d+) min one round", normed)
+    if out:
+        return [int(out.group(1))]
+    out = re.match(r"(\d+) min round plus overtime", normed)
+    if out:
+        return [int(out.group(1))]
+    out = re.match(r"(\d+)-(\d+)-(\d+)", normed)
+    if out:
+        return [int(out.group(1)), int(out.group(2)), int(out.group(3))]
+    out = re.match(r"(\d+)-(\d+)", normed)
+    if out:
+        return [int(out.group(1)), int(out.group(2))]
+    out = re.match(r"(\d+)\s\+\s(\d+)", normed)
+    if out:
+        return [int(out.group(1)), int(out.group(2))]
+    return None
 
 
 def to_meter(feet: float, inch: float) -> float:
