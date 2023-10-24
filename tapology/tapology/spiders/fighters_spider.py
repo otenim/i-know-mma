@@ -5,6 +5,33 @@ from collections.abc import Generator
 from typing import List, Union, Dict
 
 
+# Weight Limits (MMA)
+WEIGHT_LIMIT_ATOM = 47.6272
+WEIGHT_LIMIT_STRAW = 52.1631
+WEIGHT_LIMIT_FLY = 56.699
+WEIGHT_LIMIT_BANTAM = 61.235
+WEIGHT_LIMIT_FEATHER = 65.7709
+WEIGHT_LIMIT_LIGHT = 70.3068
+WEIGHT_LIMIT_WELTER = 77.1107
+WEIGHT_LIMIT_MIDDLE = 83.9146
+WEIGHT_LIMIT_LIGHT_HEAVY = 92.9864
+WEIGHT_LIMIT_HEAVY = 120.202
+
+
+# Weight Classes (MMA)
+WEIGHT_CLASS_ATOM = "atom"
+WEIGHT_CLASS_STRAW = "straw"
+WEIGHT_CLASS_FLY = "fly"
+WEIGHT_CLASS_BANTAM = "bantam"
+WEIGHT_CLASS_FEATHER = "feather"
+WEIGHT_CLASS_LIGHT = "light"
+WEIGHT_CLASS_WELTER = "welter"
+WEIGHT_CLASS_MIDDLE = "middle"
+WEIGHT_CLASS_LIGHT_HEAVY = "light_heavy"
+WEIGHT_CLASS_HEAVY = "heavy"
+WEIGHT_CLASS_SUPER_HEAVY = "super_heavy"
+
+
 class FightersSpider(scrapy.Spider):
     name = "fighters"
     start_urls = ["https://www.tapology.com/search"]
@@ -108,7 +135,9 @@ class FightersSpider(scrapy.Spider):
             "./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text()"
         ).get()
         if weight_class:
-            profile["weight_class"] = weight_class.strip()
+            normed = normalize_weight_class(weight_class)
+            if normed:
+                profile["weight_class"] = normed
 
         # Affiliation (optional)
         affili_section = details_section.xpath(
@@ -413,7 +442,6 @@ class FightersSpider(scrapy.Spider):
                     for label_section in label_sections:
                         label = label_section.xpath("./text()").get()
                         if not label:
-                            self.logger.error("No label text is provided")
                             continue
                         label = label.strip()
                         if label == "Billing:":
@@ -423,10 +451,6 @@ class FightersSpider(scrapy.Spider):
                             ).get()
                             if billing:
                                 item["billing"] = billing.strip()
-                            else:
-                                self.logger.error(
-                                    "No text is provided for billing section"
-                                )
                         elif label == "Duration:":
                             txt = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
@@ -439,70 +463,230 @@ class FightersSpider(scrapy.Spider):
                                     self.logger.error(
                                         f"Unexpected format of duration section: {txt}"
                                     )
-                            else:
-                                self.logger.error(
-                                    f"No text is provided for duration section: {response.url}"
-                                )
                         elif label == "Referee:":
                             referee = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
                             ).get()
                             if referee:
                                 item["referee"] = referee.strip()
-                            else:
-                                self.logger.error(
-                                    "No text is provided for referee section"
-                                )
-                        elif txt == "Weight:":
-                            # Lightweight · 154 lbs (70.0 kg)
-                            # Lightweight · 155 lbs (70.3 kg) · Weigh-In 155.0 lbs (70.3 kgs)
-                            # 57 kg · 57 kg (125.7 lbs)
-                            # 57 kg · 57 kg (125.0 lbs) · Weigh-In 124.7 lbs (56.6 kgs)
-                            pass
-
+                        elif label == "Weight:":
+                            txt = label_section.xpath(
+                                "./following-sibling::span[1]/text()"
+                            ).get()
+                            if txt:
+                                weight = parse_weight(txt)
+                                if weight:
+                                    item["weight"] = weight
+                                else:
+                                    self.logger.error(
+                                        f"Unexpected format of weight section: {txt}"
+                                    )
                 ret["pro_records"].append(item)
         return ret
 
 
+def normalize_weight_class(txt: str) -> Union[str, None]:
+    normed = txt.lower().strip()
+    if normed == "atomweight":
+        return WEIGHT_CLASS_ATOM
+    if normed == "strawweight":
+        return WEIGHT_CLASS_STRAW
+    if normed == "flyweight":
+        return WEIGHT_CLASS_FLY
+    if normed == "bantamweight":
+        return WEIGHT_CLASS_BANTAM
+    if normed == "featherweight":
+        return WEIGHT_CLASS_FEATHER
+    if normed == "lightweight":
+        return WEIGHT_CLASS_LIGHT
+    if normed == "welterweight":
+        return WEIGHT_CLASS_WELTER
+    if normed == "middleweight":
+        return WEIGHT_CLASS_MIDDLE
+    if normed == "light heavyweight":
+        return WEIGHT_CLASS_LIGHT_HEAVY
+    if normed == "heavyweight":
+        return WEIGHT_CLASS_HEAVY
+    if normed == "super heavyweight":
+        return WEIGHT_CLASS_SUPER_HEAVY
+    return None
+
+
+def to_weight_class(value: float, unit: str = "kg", margin: float = 0.03) -> str:
+    if unit not in ["kg", "kgs", "lbs", "lb"]:
+        raise ValueError(f"Unsupported unit: {unit}")
+    if margin < 0 or 1 < margin:
+        raise ValueError(f"margin must be in [0, 1]")
+    kg = value
+    if unit not in ["kg", "kgs"]:
+        kg = to_kg(value)
+    scale = 1 + margin
+    if kg <= WEIGHT_LIMIT_ATOM * scale:
+        return WEIGHT_CLASS_ATOM
+    if kg <= WEIGHT_LIMIT_STRAW * scale:
+        return WEIGHT_CLASS_STRAW
+    if kg <= WEIGHT_LIMIT_FLY * scale:
+        return WEIGHT_CLASS_FLY
+    if kg <= WEIGHT_LIMIT_BANTAM * scale:
+        return WEIGHT_CLASS_BANTAM
+    if kg <= WEIGHT_LIMIT_FEATHER * scale:
+        return WEIGHT_CLASS_FEATHER
+    if kg <= WEIGHT_LIMIT_LIGHT * scale:
+        return WEIGHT_CLASS_LIGHT
+    if kg <= WEIGHT_LIMIT_WELTER * scale:
+        return WEIGHT_CLASS_WELTER
+    if kg <= WEIGHT_LIMIT_MIDDLE * scale:
+        return WEIGHT_CLASS_MIDDLE
+    if kg <= WEIGHT_LIMIT_LIGHT_HEAVY * scale:
+        return WEIGHT_CLASS_LIGHT_HEAVY
+    if kg <= WEIGHT_LIMIT_HEAVY * scale:
+        return WEIGHT_CLASS_HEAVY
+    return WEIGHT_CLASS_SUPER_HEAVY
+
+
+def parse_weight(txt: str) -> Union[Dict[str, float], None]:
+    normed = txt.lower().strip()
+    weight_class = None
+    ret = {}
+    once = True
+
+    # Heavyweight
+    # 110 (kg|kgs|lb|lbs)
+    matched = re.match(r"^(.*weight|.*kg|.*kgs|.*lb|.*lbs)$", normed)
+    if matched:
+        weight_class = matched.group(1)
+        once = False
+
+    # 110 (kg|kgs|lb|lbs) (49.9 (kg|kgs|lb|lbs))
+    matched = re.match(r"^(.*kg|.*kgs|.*lb|.*lbs) \(.*\)$", normed)
+    if matched:
+        weight_class = matched.group(1)
+        print(weight_class)
+        once = False
+
+    # Heavyweight · 120 (kg|kgs|lb|lbs) (264.6 (kg|kgs|lb|lbs))
+    if once:
+        matched = re.match(
+            r"^(.*weight|.*kg|.*kgs|.*lb|.*lbs) · ([\d\.]+) (kg|kgs|lb|lbs) \(.*\)$",
+            normed,
+        )
+        if matched:
+            weight_class = matched.group(1)
+            ret["limit"] = (
+                to_kg(float(matched.group(2)))
+                if matched.group(3).startswith("lb")
+                else float(matched.group(2))
+            )
+            once = False
+
+    # Open Weight · Weigh-In 436.5 (kg|kgs|lb|lbs) (198.0 (kg|kgs|lb|lbs))
+    if once:
+        matched = re.match(
+            r"^(.*weight|.*kg|.*kgs|.*lb|.*lbs) · weigh-in ([\d\.]+) (kg|kgs|lb|lbs) \(.*\)$",
+            normed,
+        )
+        if matched:
+            weight_class = matched.group(1)
+            ret["weigh_in"] = (
+                to_kg(float(matched.group(2)))
+                if matched.group(3).startswith("lb")
+                else float(matched.group(2))
+            )
+            once = False
+
+    # Light Heavyweight · 205 (kg|kgs|lb|lbs) (93.0 (kg|kgs|lb|lbs)) · Weigh-In 201.0 (kg|kgs|lb|lbs) (91.2 (kg|kgs|lb|lbs))
+    if once:
+        matched = re.match(
+            r"^(.*weight|.*kg|.*kgs|.*lb|.*lbs) · ([\d\.]+) (kg|kgs|lb|lbs) \(.*\) · weigh-in ([\d\.]+) (kg|kgs|lb|lbs) \(.*\)$",
+            normed,
+        )
+        if matched:
+            weight_class = matched.group(1)
+            ret["limit"] = (
+                to_kg(float(matched.group(2)))
+                if matched.group(3).startswith("lb")
+                else float(matched.group(2))
+            )
+            ret["weigh_in"] = (
+                to_kg(float(matched.group(4)))
+                if matched.group(5).startswith("lb")
+                else float(matched.group(4))
+            )
+            once = False
+
+    # Normalize weight class
+    if weight_class:
+        normed_weight_class = normalize_weight_class(weight_class)
+        if normed_weight_class:
+            ret["class"] = normed_weight_class
+            return ret
+        matched = re.match(r"^([\d\.]+) (kg|kgs|lb|lbs)$", weight_class)
+        if matched:
+            # Infer weight class
+            ret["class"] = to_weight_class(
+                float(matched.group(1)), unit=matched.group(2)
+            )
+            return ret
+        if weight_class.startswith("catch") or weight_class.startswith("open"):
+            if "weigh-in" in ret:
+                # Infer weight class from weigh-in weight
+                ret["class"] = to_weight_class(ret["weigh_in"], unit="kg")
+                return ret
+            if "limit" in ret:
+                # Infer weight class from limit weight
+                ret["class"] = to_weight_class(ret["limit"], unit="kg")
+                return ret
+    return None if ret == {} else ret
+
+
 def parse_time(txt: str) -> Union[Dict[str, int], None]:
-    out = re.match(r"^(\d+):(\d+)$", txt.strip())
-    if out is None:
-        return None
-    return {"m": int(out.group(1)), "s": int(out.group(2))}
+    normed = txt.strip()
+    matched = re.match(r"^(\d+):(\d+)$", normed)
+    if matched:
+        return {"m": int(matched.group(1)), "s": int(matched.group(2))}
+    return None
 
 
 def parse_round(txt: str) -> Union[int, None]:
-    out = re.match(r"^R([1-9])$", txt.strip())
-    if out is None:
-        return None
-    return int(out.group(1))
+    normed = txt.lower().strip()
+    matched = re.match(r"^r([1-9])$", normed)
+    if matched:
+        return int(matched.group(1))
+    return None
 
 
 def parse_duration(txt: str) -> Union[List[int], None]:
     normed = txt.lower().strip()
-    out = re.match(r"(\d+)\sx\s(\d+) min", normed)
-    if out:
-        return [int(out.group(2))] * int(out.group(1))
-    out = re.match(r"(\d+) min one round", normed)
-    if out:
-        return [int(out.group(1))]
-    out = re.match(r"(\d+) min round plus overtime", normed)
-    if out:
-        return [int(out.group(1))]
-    out = re.match(r"(\d+)-(\d+)-(\d+)", normed)
-    if out:
-        return [int(out.group(1)), int(out.group(2)), int(out.group(3))]
-    out = re.match(r"(\d+)-(\d+)", normed)
-    if out:
-        return [int(out.group(1)), int(out.group(2))]
-    out = re.match(r"(\d+)\s\+\s(\d+)", normed)
-    if out:
-        return [int(out.group(1)), int(out.group(2))]
+    matched = re.match(r"^(\d+) x (\d+) min", normed)
+    if matched:
+        return [int(matched.group(2))] * int(matched.group(1))
+    matched = re.match(r"^(\d+) min one round", normed)
+    if matched:
+        return [int(matched.group(1))]
+    matched = re.match(r"^(\d+) min round plus overtime", normed)
+    if matched:
+        return [int(matched.group(1))]
+    matched = re.match(r"^(\d+)-(\d+)-(\d+)", normed)
+    if matched:
+        return [int(matched.group(1)), int(matched.group(2)), int(matched.group(3))]
+    matched = re.match(r"^(\d+)-(\d+)", normed)
+    if matched:
+        return [int(matched.group(1)), int(matched.group(2))]
+    matched = re.match(r"^(\d+) \+ (\d+)", normed)
+    if matched:
+        return [int(matched.group(1)), int(matched.group(2))]
+    matched = re.match(r"^(\d+) \+ (\d+) \+ (\d+)", normed)
+    if matched:
+        return [int(matched.group(1)), int(matched.group(2)), int(matched.group(3))]
     return None
 
 
 def to_meter(feet: float, inch: float) -> float:
     return feet * 0.3048 + inch * 0.0254
+
+
+def to_kg(lb: float) -> float:
+    return lb * 0.453592
 
 
 def infer(bout_ended_by: str) -> str:
