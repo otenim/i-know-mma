@@ -512,7 +512,7 @@ def normalize_weight_class(txt: str) -> Union[str, None]:
     return None
 
 
-def to_weight_class(value: float, unit: str = "kg", margin: float = 0.03) -> str:
+def to_weight_class(value: float, unit: str = "kg", margin: float = 0.02) -> str:
     if unit not in ["kg", "kgs", "lbs", "lb"]:
         raise ValueError(f"Unsupported unit: {unit}")
     if margin < 0 or 1 < margin:
@@ -552,22 +552,21 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
 
     # Heavyweight
     # 110 (kg|kgs|lb|lbs)
-    matched = re.match(r"^(.*weight|.*kg|.*kgs|.*lb|.*lbs)$", normed)
+    matched = re.match(r"^(.*weight|[\d\.]+ (?:kg|kgs|lb|lbs))$", normed)
     if matched:
         weight_class = matched.group(1)
         once = False
 
     # 110 (kg|kgs|lb|lbs) (49.9 (kg|kgs|lb|lbs))
-    matched = re.match(r"^(.*kg|.*kgs|.*lb|.*lbs) \(.*\)$", normed)
+    matched = re.match(r"^([\d\.]+ (?:kg|kgs|lb|lbs)) \(.*\)$", normed)
     if matched:
         weight_class = matched.group(1)
-        print(weight_class)
         once = False
 
     # Heavyweight · 120 (kg|kgs|lb|lbs) (264.6 (kg|kgs|lb|lbs))
     if once:
         matched = re.match(
-            r"^(.*weight|.*kg|.*kgs|.*lb|.*lbs) · ([\d\.]+) (kg|kgs|lb|lbs) \(.*\)$",
+            r"^(.*weight|[\d\.]+ (?:kg|kgs|lb|lbs)) · ([\d\.]+) (kg|kgs|lb|lbs) \(.*\)$",
             normed,
         )
         if matched:
@@ -582,7 +581,7 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
     # Open Weight · Weigh-In 436.5 (kg|kgs|lb|lbs) (198.0 (kg|kgs|lb|lbs))
     if once:
         matched = re.match(
-            r"^(.*weight|.*kg|.*kgs|.*lb|.*lbs) · weigh-in ([\d\.]+) (kg|kgs|lb|lbs) \(.*\)$",
+            r"^(.*weight|[\d\.]+ (?:kg|kgs|lb|lbs)) · weigh-in ([\d\.]+) (kg|kgs|lb|lbs) \(.*\)$",
             normed,
         )
         if matched:
@@ -597,7 +596,7 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
     # Light Heavyweight · 205 (kg|kgs|lb|lbs) (93.0 (kg|kgs|lb|lbs)) · Weigh-In 201.0 (kg|kgs|lb|lbs) (91.2 (kg|kgs|lb|lbs))
     if once:
         matched = re.match(
-            r"^(.*weight|.*kg|.*kgs|.*lb|.*lbs) · ([\d\.]+) (kg|kgs|lb|lbs) \(.*\) · weigh-in ([\d\.]+) (kg|kgs|lb|lbs) \(.*\)$",
+            r"^(.*weight|[\d\.]+ (?:kg|kgs|lb|lbs)) · ([\d\.]+) (kg|kgs|lb|lbs) \(.*\) · weigh-in ([\d\.]+) (kg|kgs|lb|lbs) \(.*\)$",
             normed,
         )
         if matched:
