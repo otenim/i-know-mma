@@ -120,7 +120,7 @@ class FightersSpider(scrapy.Spider):
     ) -> Generator[Request, None, None]:
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
         for fighter in fighters:
-            record = fighter.xpath("normalize-space(./td[7]/text())").get()
+            record = fighter.xpath("./td[7]/text()[normalize-space()]").get()
             if record is None:
                 self.logger.error(
                     "Unexpected page structure: could not find the mma record column on the fighters' list"
@@ -166,7 +166,7 @@ class FightersSpider(scrapy.Spider):
 
         # Fighter name (must)
         name = response.xpath(
-            "normalize-space(//div[@class='fighterUpcomingHeader']/h1[not(@*)]/text())"
+            "//div[@class='fighterUpcomingHeader']/h1[not(@*)]/text()[normalize-space()]"
         ).get()
         if name is None:
             self.logger.error(
@@ -185,7 +185,7 @@ class FightersSpider(scrapy.Spider):
 
         # Fighter's nickname (optional)
         nickname = response.xpath(
-            "normalize-space(//div[@class='fighterUpcomingHeader']/h4[@class='preTitle nickname']/text())"
+            "//div[@class='fighterUpcomingHeader']/h4[@class='preTitle nickname']/text()[normalize-space()]"
         ).re_first(r"^\"(.*)\"$")
         if nickname is not None:
             profile["nickname"] = nickname
@@ -200,7 +200,7 @@ class FightersSpider(scrapy.Spider):
 
         # Date of birth (optional)
         date_of_birth = profile_section.xpath(
-            "normalize-space(./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text())"
+            "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()[normalize-space()]"
         ).re(r"^(\d+)\.(\d+)\.(\d+)$")
         if len(date_of_birth) == 3:
             profile["date_of_birth"] = {
@@ -211,7 +211,7 @@ class FightersSpider(scrapy.Spider):
 
         # Weight class (optional)
         weight_class = profile_section.xpath(
-            "normalize-space(./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text())"
+            "./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
         if weight_class:
             normed = normalize_weight_class(weight_class)
@@ -227,7 +227,7 @@ class FightersSpider(scrapy.Spider):
         if len(affili_section) == 1:
             url = affili_section.xpath("./@href").get()
             if url is not None:
-                name = affili_section.xpath("normalize-space(./text())").get()
+                name = affili_section.xpath("./text()[normalize-space()]").get()
                 if name is not None:
                     profile["affiliation"] = {
                         "url": url,
@@ -237,7 +237,7 @@ class FightersSpider(scrapy.Spider):
         # Height (optional)
         # Format: "5\'9\" (175cm)"
         height = profile_section.xpath(
-            "normalize-space(./ul/li/strong[text()='Height:']/following-sibling::span[1]/text())"
+            "./ul/li/strong[text()='Height:']/following-sibling::span[1]/text()[normalize-space()]"
         ).re(r"^([\d\.]+)\'([\d\.]+)\"")
         if len(height) == 2:
             profile["height"] = to_meter(float(height[0]), float(height[1]))
@@ -245,14 +245,14 @@ class FightersSpider(scrapy.Spider):
         # Reach (optional)
         # Format: "74.0\" (188cm)"
         reach = profile_section.xpath(
-            "normalize-space(./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text())"
+            "./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text()[normalize-space()]"
         ).re(r"^([\d\.]+)\"")
         if len(reach) == 1:
             profile["reach"] = to_meter(0, float(reach[0]))
 
         # Place of birth (optional)
         place_of_birth = profile_section.xpath(
-            "normalize-space(./ul/li/strong[text()='Born:']/following-sibling::span[1]/text())"
+            "./ul/li/strong[text()='Born:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
         if place_of_birth is not None and place_of_birth != "N/A":
             profile["place_of_birth"] = []
@@ -262,7 +262,7 @@ class FightersSpider(scrapy.Spider):
         # Fighting out of (optional)
         # TODO: Clarify the difference place_of_birth vs out_of
         out_of = profile_section.xpath(
-            "normalize-space(./ul/li/strong[text()='Fighting out of:']/following-sibling::span[1]/text())"
+            "./ul/li/strong[text()='Fighting out of:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
         if out_of is not None and out_of != "N/A":
             profile["out_of"] = []
@@ -271,14 +271,14 @@ class FightersSpider(scrapy.Spider):
 
         # College (optional)
         college = profile_section.xpath(
-            "normalize-space(./ul/li/strong[text()='College:']/following-sibling::span[1]/text())"
+            "./ul/li/strong[text()='College:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
         if college is not None and college != "N/A":
             profile["college"] = college
 
         # Foundation styles (optional)
         styles = profile_section.xpath(
-            "normalize-space(./ul/li/strong[text()='Foundation Style:']/following-sibling::span[1]/text())"
+            "./ul/li/strong[text()='Foundation Style:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
         if styles is not None and styles != "N/A":
             profile["foundation_styles"] = []
@@ -287,16 +287,16 @@ class FightersSpider(scrapy.Spider):
 
         # Head Coach (optional)
         head_coach = profile_section.xpath(
-            "normalize-space(./ul/li/strong[text()='Head Coach:']/following-sibling::span[1]/text())"
+            "./ul/li/strong[text()='Head Coach:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
-        if head_coach is not None and head_coach != "N/A":
+        if head_coach is not None and normalize_string(head_coach) != "n/a":
             profile["head_coach"] = head_coach
 
         # Other Coaches (optional)
         other_coaches = profile_section.xpath(
-            "normalize-space(./ul/li/strong[text()='Other Coaches:']/following-sibling::span[1]/text())"
+            "./ul/li/strong[text()='Other Coaches:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
-        if other_coaches is not None and other_coaches != "N/A":
+        if other_coaches is not None and normalize_string(other_coaches) != "n/a":
             profile["other_coaches"] = []
             for c in other_coaches.split(","):
                 profile["other_coaches"].append(c.strip())
@@ -320,7 +320,7 @@ class FightersSpider(scrapy.Spider):
 
                 # NOTE: Skip ineligible bouts
                 non_mma = pro_record_section.xpath(
-                    "normalize-space(./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text())"
+                    "./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text()[normalize-space()]"
                 ).get()
                 if non_mma is not None and non_mma.startswith("Record Ineligible"):
                     continue
@@ -371,14 +371,14 @@ class FightersSpider(scrapy.Spider):
                 has_opponent_url = False if len(a) == 0 else True
                 if has_opponent_url:
                     url = a.xpath("./@href").get()
-                    name = a.xpath("normalize-space(./text())").get()
+                    name = a.xpath("./text()[normalize-space()]").get()
                     if url is not None:
                         item["opponent"]["url"] = url
                     if name is not None:
                         item["opponent"]["name"] = name
                 else:
                     name = opponent_section.xpath(
-                        "normalize-space(./div[@class='name']/span/text())"
+                        "./div[@class='name']/span/text()[normalize-space()]"
                     ).get()
                     if name is None:
                         self.logger.error(
@@ -393,7 +393,7 @@ class FightersSpider(scrapy.Spider):
                 if non_mma is None and normed_status != STATUS_CANCELLED:
                     section = opponent_section.xpath("./div[@class='record']")
                     fighter_record = section.xpath(
-                        "./span[@title='Fighter Record Before Fight']/text()"
+                        "./span[@title='Fighter Record Before Fight']/text()[normalize-space()]"
                     ).re(r"(\d+)-(\d+)-(\d+)")
                     if len(fighter_record) == 3:
                         item["record_before"] = {
@@ -406,7 +406,7 @@ class FightersSpider(scrapy.Spider):
                     # when the opponent name has a link
                     if has_opponent_url:
                         opponent_record = section.xpath(
-                            "./span[@title='Opponent Record Before Fight']/text()"
+                            "./span[@title='Opponent Record Before Fight']/text()[normalize-space()]"
                         ).re(r"(\d+)-(\d+)-(\d+)")
                         if len(opponent_record) == 3:
                             item["opponent"]["record_before"] = {
@@ -427,9 +427,11 @@ class FightersSpider(scrapy.Spider):
                             "Unexpected page structure: could not find summary lead section"
                         )
                     else:
-                        lead = lead_section.xpath("normalize-space(./a/text())").get()
+                        lead = lead_section.xpath("./a/text()[normalize-space()]").get()
                         if lead is None:
-                            lead = lead_section.xpath("normalize-space(./text())").get()
+                            lead = lead_section.xpath(
+                                "./text()[normalize-space()]"
+                            ).get()
                         if lead is None:
                             self.logger.error(
                                 "Unexpected page structure: could not find summary lead text"
@@ -496,20 +498,20 @@ class FightersSpider(scrapy.Spider):
                         "./div[@class='details tall']/div[@class='div']/span[@class='label']"
                     )
                     for label_section in label_sections:
-                        label = label_section.xpath("./text()").get()
+                        label = label_section.xpath("./text()[normalize-space()]").get()
                         if label is None:
                             continue
                         label = label.strip()
                         if label == "Billing:":
                             # "Main Event", "Main Card", "Preliminary Card"
                             billing = label_section.xpath(
-                                "./following-sibling::span[1]/text()"
+                                "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if billing:
                                 item["billing"] = billing.strip()
                         elif label == "Duration:":
                             txt = label_section.xpath(
-                                "./following-sibling::span[1]/text()"
+                                "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if txt:
                                 duration = parse_duration(txt)
@@ -521,13 +523,13 @@ class FightersSpider(scrapy.Spider):
                                     )
                         elif label == "Referee:":
                             referee = label_section.xpath(
-                                "./following-sibling::span[1]/text()"
+                                "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if referee:
                                 item["referee"] = referee.strip()
                         elif label == "Weight:":
                             txt = label_section.xpath(
-                                "./following-sibling::span[1]/text()"
+                                "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if txt:
                                 weight = parse_weight(txt)
