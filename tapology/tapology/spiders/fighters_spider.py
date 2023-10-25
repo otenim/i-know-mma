@@ -1,8 +1,9 @@
 import scrapy
 import re
 from scrapy.http import Request, TextResponse
+from scrapy.selector import Selector, SelectorList
 from collections.abc import Generator
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Optional
 
 
 # Weight Limits (MMA)
@@ -32,97 +33,148 @@ WEIGHT_CLASS_HEAVY = "heavy"
 WEIGHT_CLASS_SUPER_HEAVY = "super_heavy"
 
 
+# Sport
+SPORT_MMA = "mma"
+SPORT_KNUCKLE_MMA = "knuckle_mma"
+SPORT_BOX = "box"
+SPORT_KNUCKLE_BOX = "knuckle_box"
+SPORT_KICK = "kick"
+SPORT_MUAY = "muay"
+SPORT_KARATE = "karate"
+SPORT_SANDA = "sanda"
+SPORT_LETHWEI = "lethwei"
+SPORT_GRAPPLE = "grapple"
+SPORT_SHOOT = "shoot"
+SPORT_WRESTLE = "wrestle"
+SPORT_SAMBO = "sambo"
+SPORT_VALE = "vale"
+SPORT_JUDO = "judo"
+SPORT_CUSTOM = "custom"
+
+
+# Expected values for bout's sport
+VALUES_SPORT_MMA = ["mma"]
+VALUES_SPORT_KNUCKLE_MMA = ["knuckle_mma"]
+VALUES_SPORT_BOX = ["boxing", "boxing_cage"]
+VALUES_SPORT_KNUCKLE_BOX = ["knuckle"]
+VALUES_SPORT_KICK = ["kickboxing"]
+VALUES_SPORT_MUAY = ["muay"]
+VALUES_SPORT_KARATE = ["karate"]
+VALUES_SPORT_SANDA = ["sanda"]
+VALUES_SPORT_LETHWEI = ["lethwei"]
+VALUES_SPORT_GRAPPLE = ["grappling"]
+VALUES_SPORT_SHOOT = ["shootboxing"]
+VALUES_SPORT_WRESTLE = ["wrestling"]
+VALUES_SPORT_SAMBO = ["sambo"]
+VALUES_SPORT_VALE = ["valetudo"]
+VALUES_SPORT_JUDO = ["judo"]
+VALUES_SPORT_CUSTOM = ["custom"]
+
+
+# Configs
+SKIP_AMATEUR_FIGHTERS = True
+SKIP_INEXPERIENCED_FIGHTERS = True
+MINIMUM_PRO_MMA_BOUT_COUNT_REQUIRED = 3
+
+
 class FightersSpider(scrapy.Spider):
     name = "fighters"
     start_urls = ["https://www.tapology.com/search"]
 
     def parse(self, response: TextResponse) -> Generator[Request, None, None]:
-        fighters_by_weight_class = response.xpath(
+        urls = response.xpath(
             "//div[@class='siteSearchFightersByWeightClass']/dd/a/@href"
         ).getall()
-        if len(fighters_by_weight_class) == 0:
-            self.logger.critical(
-                "No weight classes were found. Make sure if this is an expected behavior"
-            )
-        else:
-            self.logger.info(
-                f"{len(fighters_by_weight_class)} different weight classes were found"
-            )
-        for link in fighters_by_weight_class:
-            yield response.follow(link, callback=self.parse_fighter_list)
+        for url in urls:
+            yield response.follow(url, callback=self.parse_fighter_list)
 
     def parse_fighter_list(
         self, response: TextResponse
     ) -> Generator[Request, None, None]:
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
-        count = 0
         for fighter in fighters:
-            mma_rec = fighter.xpath("./td[7]/text()").get()
-            if not mma_rec:
-                self.logger.error("No mma record was found")
+            record = fighter.xpath("normalize-space(./td[7]/text())").get()
+            if record is None:
+                self.logger.error(
+                    "Unexpected page structure: could not find the mma record column on the fighters' list"
+                )
                 continue
-            mma_rec = mma_rec.strip()
-            matched = re.match(r"^(?:(Am)\s)?(\d+)-(\d+)-(\d+)(?:,\s\d+ NC)?$", mma_rec)
-            if not matched:
-                self.logger.error(f"Unexpected mma record format was found: {mma_rec}")
+            matched = re.match(r"^(?:(Am) )?(\d+)-(\d+)-(\d+)(?:, \d+ NC)?$", record)
+            if matched is None:
+                self.logger.error(f"Unexpected mma record format was found: {record}")
                 continue
-            if matched.group(1) == "Am":
-                # Skip amateur fighters
+            if (SKIP_INEXPERIENCED_FIGHTERS or SKIP_AMATEUR_FIGHTERS) and matched.group(
+                1
+            ) == "Am":
                 continue
-            n = int(matched.group(2)) + int(matched.group(3)) + int(matched.group(4))
-            if n <= 2:
-                # Skip pro fighters who has too little game experience (<= 2 pro mma matches)
+            if (
+                SKIP_INEXPERIENCED_FIGHTERS
+                and sum(
+                    [
+                        int(matched.group(2)),
+                        int(matched.group(3)),
+                        int(matched.group(4)),
+                    ]
+                )
+                < MINIMUM_PRO_MMA_BOUT_COUNT_REQUIRED
+            ):
                 continue
-            link = fighter.xpath("./td[1]/a/@href").get()
-            if link:
-                yield response.follow(link, callback=self.parse_fighter)
-            else:
-                self.logger.error("No link was found to this fighter's page")
-            count += 1
-        self.logger.info(f"Crawled {count} different fighters' pages")
+            url = fighter.xpath("./td[1]/a/@href").get()
+            if url is not None:
+                yield response.follow(url, callback=self.parse_fighter)
 
-        # Move to next page
-        next_page = response.xpath(
+        # To the next page
+        next_url = response.xpath(
             "//span[@class='moreLink']/nav[@class='pagination']/span[@class='next']/a/@href"
         ).get()
-        if next_page:
-            yield response.follow(next_page, callback=self.parse_fighter_list)
+        if next_url is not None:
+            yield response.follow(next_url, callback=self.parse_fighter_list)
 
     def parse_fighter(self, response: TextResponse):
         ret = {}
 
         # Fighter url (must)
+        # NOTE: response.url is never None
         ret["url"] = response.url
 
         # Fighter name (must)
         name = response.xpath(
-            "//div[@class='fighterUpcomingHeader']/h1[not(@*)]/text()"
+            "normalize-space(//div[@class='fighterUpcomingHeader']/h1[not(@*)]/text())"
         ).get()
-        if not name:
-            self.logger.error("Fighter's name was not found")
+        if name is None:
+            self.logger.error(
+                "Unexpected page structure: could not find the fighter's name"
+            )
             return
-        ret["name"] = name.strip()
+        ret["name"] = name
 
-        # Stores profile data of the fighter
+        ###########################################################
+        #
+        # Scrape fighter's profile
+        #
+        ###########################################################
+        # Stores fighter's profile
         profile = {}
 
-        # Fighter nickname
-        fighter_nickname = response.xpath(
-            "//div[@class='fighterUpcomingHeader']/h4[@class='preTitle nickname']/text()"
-        ).re_first(r"\"(.*)\"")
-        if fighter_nickname:
-            profile["nickname"] = fighter_nickname.strip()
+        # Fighter's nickname (optional)
+        nickname = response.xpath(
+            "normalize-space(//div[@class='fighterUpcomingHeader']/h4[@class='preTitle nickname']/text())"
+        ).re_first(r"^\"(.*)\"$")
+        if nickname is not None:
+            profile["nickname"] = nickname
 
-        # Details section (must)
-        details_section = response.xpath("//div[@class='details details_two_columns']")
-        if len(details_section) == 0:
-            self.logger.error("Details section was not found")
+        # The section which stores fighter's profile data (must)
+        profile_section = response.xpath("//div[@class='details details_two_columns']")
+        if len(profile_section) == 0:
+            self.logger.error(
+                "Unexpected page structure: could not find the profile section"
+            )
             return
 
         # Date of birth (optional)
-        date_of_birth = details_section.xpath(
-            "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()"
-        ).re(r"(\d{4})\.(\d{2})\.(\d{2})")
+        date_of_birth = profile_section.xpath(
+            "normalize-space(./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text())"
+        ).re(r"^(\d+)\.(\d+)\.(\d+)$")
         if len(date_of_birth) == 3:
             profile["date_of_birth"] = {
                 "y": int(date_of_birth[0]),
@@ -131,158 +183,141 @@ class FightersSpider(scrapy.Spider):
             }
 
         # Weight class (optional)
-        weight_class = details_section.xpath(
-            "./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text()"
+        weight_class = profile_section.xpath(
+            "normalize-space(./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text())"
         ).get()
         if weight_class:
             normed = normalize_weight_class(weight_class)
-            if normed:
+            if normed is not None:
                 profile["weight_class"] = normed
+            else:
+                self.logger.error(f"Unexpected weight class was found: {weight_class}")
 
         # Affiliation (optional)
-        affili_section = details_section.xpath(
+        affili_section = profile_section.xpath(
             "./ul/li/strong[text()='Affiliation:']/following-sibling::span[1]/a"
         )
         if len(affili_section) == 1:
             url = affili_section.xpath("./@href").get()
-            if url:
-                name = affili_section.xpath("./text()").get()
-                if name:
+            if url is not None:
+                name = affili_section.xpath("normalize-space(./text())").get()
+                if name is not None:
                     profile["affiliation"] = {
-                        "url": url.strip(),
-                        "name": name.strip(),
+                        "url": url,
+                        "name": name,
                     }
 
         # Height (optional)
         # Format: "5\'9\" (175cm)"
-        height = details_section.xpath(
-            "./ul/li/strong[text()='Height:']/following-sibling::span[1]/text()"
-        ).re(r"([\d\.]+)\'([\d\.]+)\"")
+        height = profile_section.xpath(
+            "normalize-space(./ul/li/strong[text()='Height:']/following-sibling::span[1]/text())"
+        ).re(r"^([\d\.]+)\'([\d\.]+)\"")
         if len(height) == 2:
             profile["height"] = to_meter(float(height[0]), float(height[1]))
 
         # Reach (optional)
         # Format: "74.0\" (188cm)"
-        reach = details_section.xpath(
-            "./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text()"
-        ).re(r"([\d\.]+)\"")
+        reach = profile_section.xpath(
+            "normalize-space(./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text())"
+        ).re(r"^([\d\.]+)\"")
         if len(reach) == 1:
             profile["reach"] = to_meter(0, float(reach[0]))
 
-        # Place of birth
-        place_of_birth = details_section.xpath(
-            "./ul/li/strong[text()='Born:']/following-sibling::span[1]/text()"
+        # Place of birth (optional)
+        place_of_birth = profile_section.xpath(
+            "normalize-space(./ul/li/strong[text()='Born:']/following-sibling::span[1]/text())"
         ).get()
-        if place_of_birth:
-            place_of_birth = place_of_birth.strip()
-            if place_of_birth != "N/A":
-                profile["place_of_birth"] = []
-                for p in place_of_birth.split(","):
-                    profile["place_of_birth"].append(p.strip())
+        if place_of_birth is not None and place_of_birth != "N/A":
+            profile["place_of_birth"] = []
+            for p in place_of_birth.split(","):
+                profile["place_of_birth"].append(p.strip())
 
-        # Fighting out of
-        out_of = details_section.xpath(
-            "./ul/li/strong[text()='Fighting out of:']/following-sibling::span[1]/text()"
+        # Fighting out of (optional)
+        # TODO: Clarify the difference place_of_birth vs out_of
+        out_of = profile_section.xpath(
+            "normalize-space(./ul/li/strong[text()='Fighting out of:']/following-sibling::span[1]/text())"
         ).get()
-        if out_of:
-            out_of = out_of.strip()
-            if out_of != "N/A":
-                profile["out_of"] = []
-                for o in out_of.split(","):
-                    profile["out_of"].append(o.strip())
+        if out_of is not None and out_of != "N/A":
+            profile["out_of"] = []
+            for o in out_of.split(","):
+                profile["out_of"].append(o.strip())
 
-        # College the fighter graduated from
-        college = details_section.xpath(
-            "./ul/li/strong[text()='College:']/following-sibling::span[1]/text()"
+        # College (optional)
+        college = profile_section.xpath(
+            "normalize-space(./ul/li/strong[text()='College:']/following-sibling::span[1]/text())"
         ).get()
-        if college:
-            college = college.strip()
-            if college != "N/A":
-                profile["college"] = college
+        if college is not None and college != "N/A":
+            profile["college"] = college
 
-        # Foundation styles
-        foundation_styles = details_section.xpath(
-            "./ul/li/strong[text()='Foundation Style:']/following-sibling::span[1]/text()"
+        # Foundation styles (optional)
+        styles = profile_section.xpath(
+            "normalize-space(./ul/li/strong[text()='Foundation Style:']/following-sibling::span[1]/text())"
         ).get()
-        if foundation_styles:
-            foundation_styles = foundation_styles.strip()
-            if foundation_styles != "N/A":
-                profile["foundation_styles"] = []
-                for s in foundation_styles.split(","):
-                    profile["foundation_styles"].append(s.strip())
+        if styles is not None and styles != "N/A":
+            profile["foundation_styles"] = []
+            for s in styles.split(","):
+                profile["foundation_styles"].append(s.strip())
 
-        # Head Coach
-        head_coach = details_section.xpath(
-            "./ul/li/strong[text()='Head Coach:']/following-sibling::span[1]/text()"
+        # Head Coach (optional)
+        head_coach = profile_section.xpath(
+            "normalize-space(./ul/li/strong[text()='Head Coach:']/following-sibling::span[1]/text())"
         ).get()
-        if head_coach:
-            head_coach = head_coach.strip()
-            if head_coach != "N/A":
-                profile["head_coach"] = head_coach
+        if head_coach is not None and head_coach != "N/A":
+            profile["head_coach"] = head_coach
 
-        # Other Coaches
-        other_coaches = details_section.xpath(
-            "./ul/li/strong[text()='Other Coaches:']/following-sibling::span[1]/text()"
+        # Other Coaches (optional)
+        other_coaches = profile_section.xpath(
+            "normalize-space(./ul/li/strong[text()='Other Coaches:']/following-sibling::span[1]/text())"
         ).get()
-        if other_coaches:
-            other_coaches = other_coaches.strip()
-            if other_coaches != "N/A":
-                profile["other_coaches"] = []
-                for c in other_coaches.split(","):
-                    profile["other_coaches"].append(c.strip())
+        if other_coaches is not None and other_coaches != "N/A":
+            profile["other_coaches"] = []
+            for c in other_coaches.split(","):
+                profile["other_coaches"].append(c.strip())
 
         # Set profile to the output dict
         ret["profile"] = profile
 
-        # Pro records
-        pro_rec_sections = response.xpath(
+        ###########################################################
+        #
+        # Scrape pro bout records
+        #
+        ###########################################################
+        pro_record_sections = response.xpath(
             "//section[@class='fighterFightResults']/ul[@id='proResults']/li"
         )
-        if len(pro_rec_sections) > 0:
+        if len(pro_record_sections) > 0:
             ret["pro_records"] = []
-            for pro_rec_section in pro_rec_sections:
-                # Stores each record
+            for pro_record_section in pro_record_sections:
+                # Stores a single bout data
                 item = {}
 
-                # NOTE: Skip ineligible mma bouts
-                txt = pro_rec_section.xpath(
-                    "./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text()"
+                # NOTE: Skip ineligible bouts
+                non_mma = pro_record_section.xpath(
+                    "normalize-space(./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text())"
                 ).get()
-                if txt and txt.strip() == "Record Ineligible MMA":
+                if non_mma is not None and non_mma.startswith("Record Ineligible"):
                     continue
 
                 # Sport of the bout (must)
-                sport = pro_rec_section.xpath("./@data-sport").get()
-                if not sport:
-                    self.logger.error("Could not identify the sport of the bout")
+                sport = pro_record_section.xpath("./@data-sport").get()
+                if sport is None:
+                    self.logger.error(
+                        "Unexpected page structure: could not identify the sport of the bout"
+                    )
                     continue
-                sport = sport.strip()
-                if sport not in [
-                    "mma",
-                    "knuckle_mma",
-                    "boxing",
-                    "boxing_cage",
-                    "knuckle",
-                    "kickboxing",
-                    "muay",
-                    "karate",
-                    "sanda",
-                    "lethwei",
-                    "grappling",
-                    "shootboxing",
-                    "wrestling",
-                    "sambo",
-                    "custom",
-                ]:
-                    self.logger.warning(f"Unrecognized sport was detected: {sport}")
-                if sport == "custom":
-                    # NOTE: Skip custom-ruled bout records
-                    continue
-                item["sport"] = sport
+                else:
+                    normed = normalize_sport(sport)
+                    if normed is None:
+                        self.logger.error(f"Unexpected sport value was found: {sport}")
+                    elif normed == SPORT_CUSTOM:
+                        # NOTE: Skip custom-ruled bout records
+                        continue
+                    else:
+                        item["sport"] = normed
 
-                # Bout status (must)
-                status = pro_rec_section.xpath("./@data-status").get()
-                if not status:
+                # Status (result) of the bout (must)
+                status = pro_record_section.xpath("./@data-status").get()
+                if status is None:
                     self.logger.error("Bout status is not provided")
                     continue
                 status = status.strip()
@@ -307,7 +342,7 @@ class FightersSpider(scrapy.Spider):
                     continue
 
                 # Opponent fighter (must)
-                opponent_section = pro_rec_section.xpath(
+                opponent_section = pro_record_section.xpath(
                     "./div[@class='result']/div[@class='opponent']"
                 )
                 if len(opponent_section) == 0:
@@ -368,7 +403,7 @@ class FightersSpider(scrapy.Spider):
                 # Bout summary
                 # NOTE: Scrape only official mma bouts with result of win or lose
                 if is_official_mma_bout and item["status"] in ["w", "l"]:
-                    summary_lead_section = pro_rec_section.xpath(
+                    summary_lead_section = pro_record_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='lead']"
                     )
                     if len(summary_lead_section) == 1:
@@ -436,12 +471,12 @@ class FightersSpider(scrapy.Spider):
                 # Bout details
                 # NOTE: Scrape only official mma bouts with result of win or lose
                 if is_official_mma_bout and item["status"] in ["w", "l"]:
-                    label_sections = pro_rec_section.xpath(
+                    label_sections = pro_record_section.xpath(
                         "./div[@class='details tall']/div[@class='div']/span[@class='label']"
                     )
                     for label_section in label_sections:
                         label = label_section.xpath("./text()").get()
-                        if not label:
+                        if label is None:
                             continue
                         label = label.strip()
                         if label == "Billing:":
@@ -485,8 +520,52 @@ class FightersSpider(scrapy.Spider):
         return ret
 
 
-def normalize_weight_class(txt: str) -> Union[str, None]:
-    normed = txt.lower().strip()
+def normalize_string(s: str, lower: bool = True) -> str:
+    temp = " ".join(s.split())
+    if lower:
+        temp = temp.lower()
+    return temp
+
+
+def normalize_sport(sport: str) -> Union[str, None]:
+    normed = normalize_string(sport)
+    if normed in VALUES_SPORT_MMA:
+        return SPORT_MMA
+    if normed in VALUES_SPORT_KNUCKLE_MMA:
+        return SPORT_KNUCKLE_MMA
+    if normed in VALUES_SPORT_BOX:
+        return SPORT_BOX
+    if normed in VALUES_SPORT_KNUCKLE_BOX:
+        return SPORT_KNUCKLE_BOX
+    if normed in VALUES_SPORT_KICK:
+        return SPORT_KICK
+    if normed in VALUES_SPORT_MUAY:
+        return SPORT_MUAY
+    if normed in VALUES_SPORT_KARATE:
+        return SPORT_KARATE
+    if normed in VALUES_SPORT_SANDA:
+        return SPORT_SANDA
+    if normed in VALUES_SPORT_LETHWEI:
+        return SPORT_LETHWEI
+    if normed in VALUES_SPORT_GRAPPLE:
+        return SPORT_GRAPPLE
+    if normed in VALUES_SPORT_SHOOT:
+        return SPORT_SHOOT
+    if normed in VALUES_SPORT_WRESTLE:
+        return SPORT_WRESTLE
+    if normed in VALUES_SPORT_SAMBO:
+        return SPORT_SAMBO
+    if normed in VALUES_SPORT_VALE:
+        return SPORT_VALE
+    if normed in VALUES_SPORT_JUDO:
+        return SPORT_JUDO
+    if normed in VALUES_SPORT_CUSTOM:
+        return SPORT_CUSTOM
+    return None
+
+
+def normalize_weight_class(weight_class: str) -> Union[str, None]:
+    normed = normalize_string(weight_class)
     if normed == "atomweight":
         return WEIGHT_CLASS_ATOM
     if normed == "strawweight":
@@ -552,16 +631,18 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
 
     # Heavyweight
     # 110 (kg|kgs|lb|lbs)
-    matched = re.match(r"^(.*weight|[\d\.]+ (?:kg|kgs|lb|lbs))$", normed)
-    if matched:
-        weight_class = matched.group(1)
-        once = False
+    if once:
+        matched = re.match(r"^(.*weight|[\d\.]+ (?:kg|kgs|lb|lbs))$", normed)
+        if matched:
+            weight_class = matched.group(1)
+            once = False
 
     # 110 (kg|kgs|lb|lbs) (49.9 (kg|kgs|lb|lbs))
-    matched = re.match(r"^([\d\.]+ (?:kg|kgs|lb|lbs)) \(.*\)$", normed)
-    if matched:
-        weight_class = matched.group(1)
-        once = False
+    if once:
+        matched = re.match(r"^([\d\.]+ (?:kg|kgs|lb|lbs)) \(.*\)$", normed)
+        if matched:
+            weight_class = matched.group(1)
+            once = False
 
     # Heavyweight · 120 (kg|kgs|lb|lbs) (264.6 (kg|kgs|lb|lbs))
     if once:
@@ -626,7 +707,7 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
                 float(matched.group(1)), unit=matched.group(2)
             )
             return ret
-        if weight_class.startswith("catch") or weight_class.startswith("open"):
+        if weight_class.startswith("open") or weight_class.startswith("catch"):
             if "weigh-in" in ret:
                 # Infer weight class from weigh-in weight
                 ret["class"] = to_weight_class(ret["weigh_in"], unit="kg")
@@ -635,6 +716,10 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
                 # Infer weight class from limit weight
                 ret["class"] = to_weight_class(ret["limit"], unit="kg")
                 return ret
+            if weight_class.startswith("open"):
+                ret["class"] = "open"
+            elif weight_class.startswith("catch"):
+                ret["class"] = "catch"
     return None if ret == {} else ret
 
 
