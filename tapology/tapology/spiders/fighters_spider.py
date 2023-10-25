@@ -71,7 +71,34 @@ VALUES_SPORT_JUDO = ["judo"]
 VALUES_SPORT_CUSTOM = ["custom"]
 
 
+# Bout's status
+STATUS_WIN = "win"
+STATUS_LOSS = "loss"
+STATUS_CANCELLED = "cancelled"
+STATUS_DRAW = "draw"
+STATUS_UPCOMING = "upcoming"
+STATUS_NO_CONTEST = "no_contest"
+STATUS_UNKNOWN = "unknown"
+
+
+# Expected values for bout's status
+VALUES_STATUS_WIN = ["win", "won", "w"]
+VALUES_STATUS_LOSS = ["loss", "lose", "lost", "l"]
+VALUES_STATUS_CANCELLED = ["cancelled", "c"]
+VALUES_STATUS_DRAW = ["draw", "d"]
+VALUES_STATUS_UPCOMING = ["upcoming"]
+VALUES_STATUS_NO_CONTEST = ["no contest", "no_contest", "nocontest"]
+VALUES_STATUS_UNKNOWN = ["unknown"]
+
+
 # Configs
+STATUS_TO_SKIP = [
+    STATUS_CANCELLED,
+    STATUS_UPCOMING,
+    STATUS_NO_CONTEST,
+    STATUS_UNKNOWN,
+]
+SPORTS_TO_SKIP = [SPORT_CUSTOM]
 SKIP_AMATEUR_FIGHTERS = True
 SKIP_INEXPERIENCED_FIGHTERS = True
 MINIMUM_PRO_MMA_BOUT_COUNT_REQUIRED = 3
@@ -305,114 +332,108 @@ class FightersSpider(scrapy.Spider):
                         "Unexpected page structure: could not identify the sport of the bout"
                     )
                     continue
-                else:
-                    normed = normalize_sport(sport)
-                    if normed is None:
-                        self.logger.error(f"Unexpected sport value was found: {sport}")
-                    elif normed == SPORT_CUSTOM:
-                        # NOTE: Skip custom-ruled bout records
-                        continue
-                    else:
-                        item["sport"] = normed
+                normed_sport = normalize_sport(sport)
+                if normed_sport is None:
+                    self.logger.error(f"Unexpected sport value was found: {sport}")
+                    continue
+                if normed_sport in SPORTS_TO_SKIP:
+                    continue
+                item["sport"] = normed_sport
 
-                # Status (result) of the bout (must)
+                # Status of the bout (must)
                 status = pro_record_section.xpath("./@data-status").get()
                 if status is None:
-                    self.logger.error("Bout status is not provided")
+                    self.logger.error(
+                        "Unexpected page structure: could not identify the status of the bout"
+                    )
                     continue
-                status = status.strip()
-                if status not in [
-                    "loss",
-                    "win",
-                    "cancelled",
-                    "draw",
-                    "upcoming",
-                    "no contest",
-                    "unknown",
-                ]:
-                    self.logger.warning(f"Unrecognized status was detected: {status}")
-                if status == "win":
-                    item["status"] = "w"
-                elif status == "loss":
-                    item["status"] = "l"
-                elif status == "draw":
-                    item["status"] = "d"
-                else:
-                    # NOTE: Skip cancelled, no-contest, status-unknown, and upcoming records
+                normed_status = normalize_status(status)
+                if normed_status is None:
+                    self.logger.error(f"Unexpected status value was found: {status}")
                     continue
+                if normed_status in STATUS_TO_SKIP:
+                    continue
+                item["status"] = normed_status
 
                 # Opponent fighter (must)
                 opponent_section = pro_record_section.xpath(
                     "./div[@class='result']/div[@class='opponent']"
                 )
                 if len(opponent_section) == 0:
-                    self.logger.error("No opponent data is provided")
+                    self.logger.error(
+                        "Unexpected page structure: could not find any opponent data"
+                    )
                     continue
                 item["opponent"] = {}
 
-                # Opponent name (at least name must be provided)
-                section = opponent_section.xpath("./div[@class='name']/a")
-                has_opponent_link = False if len(section) == 0 else True
-                if has_opponent_link:
-                    link = section.xpath("./@href").get()
-                    name = section.xpath("./text()").get()
-                    if link:
-                        item["opponent"]["url"] = link.strip()
-                    if name:
-                        item["opponent"]["name"] = name.strip()
+                # Opponent's name (at least name must be provided)
+                a = opponent_section.xpath("./div[@class='name']/a")
+                has_opponent_url = False if len(a) == 0 else True
+                if has_opponent_url:
+                    url = a.xpath("./@href").get()
+                    name = a.xpath("normalize-space(./text())").get()
+                    if url is not None:
+                        item["opponent"]["url"] = url
+                    if name is not None:
+                        item["opponent"]["name"] = name
                 else:
                     name = opponent_section.xpath(
-                        "./div[@class='name']/span/text()"
+                        "normalize-space(./div[@class='name']/span/text())"
                     ).get()
-                    if name:
-                        item["opponent"]["name"] = name.strip()
+                    if name is None:
+                        self.logger.error(
+                            "Unexpected page structure: could not find opponent's name"
+                        )
+                        continue
+                    item["opponent"]["name"] = name
 
-                # Record before the fight
-                # NOTE: available when the bout is an official mma bout
-                # and was not cancelled
-                is_official_mma_bout = (
-                    True
-                    if len(opponent_section.xpath("./div[@class='record nonMma']")) == 0
-                    else False
-                )
-                if is_official_mma_bout and item["status"] != "cancelled":
+                # Record before the fight (optional)
+                # NOTE: available when the bout is not tagged as "nonMma"
+                # and its status is not "cancelled"
+                if non_mma is None and normed_status != STATUS_CANCELLED:
                     section = opponent_section.xpath("./div[@class='record']")
                     fighter_record = section.xpath(
                         "./span[@title='Fighter Record Before Fight']/text()"
                     ).re(r"(\d+)-(\d+)-(\d+)")
                     if len(fighter_record) == 3:
-                        item["record_before_fight"] = {
+                        item["record_before"] = {
                             "w": int(fighter_record[0].strip()),
                             "l": int(fighter_record[1].strip()),
                             "d": int(fighter_record[2].strip()),
                         }
 
-                    # NOTE: Opponent record is provided
-                    # when there is a link to the opponent
-                    if has_opponent_link:
+                    # NOTE: Opponent record is available
+                    # when the opponent name has a link
+                    if has_opponent_url:
                         opponent_record = section.xpath(
                             "./span[@title='Opponent Record Before Fight']/text()"
                         ).re(r"(\d+)-(\d+)-(\d+)")
                         if len(opponent_record) == 3:
-                            item["opponent"]["record_before_fight"] = {
+                            item["opponent"]["record_before"] = {
                                 "w": int(opponent_record[0].strip()),
                                 "l": int(opponent_record[1].strip()),
                                 "d": int(opponent_record[2].strip()),
                             }
 
-                # Bout summary
-                # NOTE: Scrape only official mma bouts with result of win or lose
-                if is_official_mma_bout and item["status"] in ["w", "l"]:
-                    summary_lead_section = pro_record_section.xpath(
+                # Bout summary (optional)
+                # NOTE: For now, scrape only mma bouts (not tagged as "nonMma")
+                # with status win or loss
+                if non_mma is None and normed_status in [STATUS_WIN, STATUS_LOSS]:
+                    lead_section = pro_record_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='lead']"
                     )
-                    if len(summary_lead_section) == 1:
-                        lead = summary_lead_section.xpath("./a/text()").get()
-                        if not lead:
-                            # No links to the summary lead
-                            lead = summary_lead_section.xpath("./text()").get()
-                        if not lead:
-                            self.logger.error("No summary lead text is provided")
+                    if len(lead_section) == 0:
+                        self.logger.error(
+                            "Unexpected page structure: could not find summary lead section"
+                        )
+                    else:
+                        lead = lead_section.xpath("normalize-space(./a/text())").get()
+                        if lead is None:
+                            lead = lead_section.xpath("normalize-space(./text())").get()
+                        if lead is None:
+                            self.logger.error(
+                                "Unexpected page structure: could not find summary lead text"
+                            )
                         else:
                             l = list(
                                 filter(
@@ -423,20 +444,19 @@ class FightersSpider(scrapy.Spider):
                             n = len(l)
                             if not (1 <= n <= 4):
                                 self.logger.error(
-                                    f"Unexpected summary lead format: {lead}"
+                                    f"Unexpected format of summary lead text: {lead}"
                                 )
                             else:
-                                # Parse summary lead
                                 if n != 1:
                                     item["details"] = {}
                                     if n == 2:
-                                        # (Win|Loss), finish
+                                        # (Win|Loss), Finish
                                         item["details"]["ended_by"] = {
                                             "type": infer(l[1]),
                                             "detail": l[1],
                                         }
                                     elif n == 3:
-                                        # (Win|Loss), finish, round
+                                        # (Win|Loss), Finish, Round
                                         # (Win|Loss), Decision, (Majority|Unanimous|Split)
                                         t = infer(l[1])
                                         if t == "decision":
@@ -450,27 +470,28 @@ class FightersSpider(scrapy.Spider):
                                                 "detail": l[1],
                                             }
                                             r = parse_round(l[2])
-                                            if r:
+                                            if r is not None:
                                                 item["details"]["ended_at"] = {
                                                     "round": r
                                                 }
-                                    else:
-                                        # (Win|Loss), finish, time, round
+                                    elif n == 4:
+                                        # (Win|Loss), Finish, Time, Round
                                         item["details"]["ended_by"] = {
                                             "type": infer(l[1]),
                                             "detail": l[1],
                                         }
                                         r, t = parse_round(l[3]), parse_time(l[2])
-                                        if r or t:
+                                        if r is not None or t is not None:
                                             item["details"]["ended_at"] = {}
-                                            if r:
+                                            if r is not None:
                                                 item["details"]["ended_at"]["round"] = r
-                                            if t:
+                                            if t is not None:
                                                 item["details"]["ended_at"]["time"] = t
 
                 # Bout details
-                # NOTE: Scrape only official mma bouts with result of win or lose
-                if is_official_mma_bout and item["status"] in ["w", "l"]:
+                # NOTE: For now, scrape only mma bouts (not tagged as "nonMma")
+                # with status win or loss
+                if non_mma is None and normed_status in [STATUS_WIN, STATUS_LOSS]:
                     label_sections = pro_record_section.xpath(
                         "./div[@class='details tall']/div[@class='div']/span[@class='label']"
                     )
@@ -525,6 +546,25 @@ def normalize_string(s: str, lower: bool = True) -> str:
     if lower:
         temp = temp.lower()
     return temp
+
+
+def normalize_status(status: str) -> Union[str, None]:
+    normed = normalize_string(status)
+    if normed in VALUES_STATUS_WIN:
+        return STATUS_WIN
+    if normed in VALUES_STATUS_LOSS:
+        return STATUS_LOSS
+    if normed in VALUES_STATUS_DRAW:
+        return STATUS_DRAW
+    if normed in VALUES_STATUS_CANCELLED:
+        return STATUS_CANCELLED
+    if normed in VALUES_STATUS_NO_CONTEST:
+        return STATUS_NO_CONTEST
+    if normed in VALUES_STATUS_UPCOMING:
+        return STATUS_UPCOMING
+    if normed in VALUES_STATUS_UNKNOWN:
+        return STATUS_UNKNOWN
+    return None
 
 
 def normalize_sport(sport: str) -> Union[str, None]:
