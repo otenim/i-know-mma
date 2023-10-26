@@ -90,12 +90,12 @@ STATUS_UNKNOWN = "unknown"
 
 
 # Expected values for bout's status
-VALUES_STATUS_WIN = ["win", "w"]
-VALUES_STATUS_LOSS = ["loss", "l"]
-VALUES_STATUS_CANCELLED = ["cancelled", "cancelled bout", "c"]
-VALUES_STATUS_DRAW = ["draw", "d"]
+VALUES_STATUS_WIN = ["win"]
+VALUES_STATUS_LOSS = ["loss"]
+VALUES_STATUS_CANCELLED = ["cancelled", "cancelled bout"]
+VALUES_STATUS_DRAW = ["draw"]
 VALUES_STATUS_UPCOMING = ["upcoming", "confirmed upcoming bout"]
-VALUES_STATUS_NO_CONTEST = ["no contest", "no_contest", "nocontest"]
+VALUES_STATUS_NO_CONTEST = ["no contest"]
 VALUES_STATUS_UNKNOWN = ["unknown"]
 
 
@@ -190,15 +190,12 @@ class FightersSpider(scrapy.Spider):
         # Scrape fighter's profile
         #
         ###########################################################
-        # Stores fighter's profile
-        profile = {}
-
         # Fighter's nickname (optional)
         nickname = response.xpath(
             "//div[@class='fighterUpcomingHeader']/h4[@class='preTitle nickname']/text()[normalize-space()]"
         ).re_first(r"^\"(.*)\"$")
         if nickname is not None:
-            profile["nickname"] = nickname
+            ret["nickname"] = nickname
 
         # The section which stores fighter's profile data (must)
         profile_section = response.xpath("//div[@class='details details_two_columns']")
@@ -213,7 +210,7 @@ class FightersSpider(scrapy.Spider):
             "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()[normalize-space()]"
         ).re(r"^(\d+)\.(\d+)\.(\d+)$")
         if len(date_of_birth) == 3:
-            profile["date_of_birth"] = {
+            ret["date_of_birth"] = {
                 "y": int(date_of_birth[0]),
                 "m": int(date_of_birth[1]),
                 "d": int(date_of_birth[2]),
@@ -226,7 +223,7 @@ class FightersSpider(scrapy.Spider):
         if weight_class:
             normed = normalize_weight_class(weight_class)
             if normed is not None:
-                profile["weight_class"] = normed
+                ret["weight_class"] = normed
             else:
                 self.logger.error(f"Unexpected weight class: {weight_class}")
 
@@ -239,7 +236,7 @@ class FightersSpider(scrapy.Spider):
             if url is not None:
                 name = affili_section.xpath("./text()[normalize-space()]").get()
                 if name is not None:
-                    profile["affiliation"] = {
+                    ret["affiliation"] = {
                         "url": url,
                         "name": name,
                     }
@@ -250,7 +247,7 @@ class FightersSpider(scrapy.Spider):
             "./ul/li/strong[text()='Height:']/following-sibling::span[1]/text()[normalize-space()]"
         ).re(r"^([\d\.]+)\'([\d\.]+)\"")
         if len(height) == 2:
-            profile["height"] = to_meter(float(height[0]), float(height[1]))
+            ret["height"] = to_meter(float(height[0]), float(height[1]))
 
         # Reach (optional)
         # Format: "74.0\" (188cm)"
@@ -258,16 +255,16 @@ class FightersSpider(scrapy.Spider):
             "./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text()[normalize-space()]"
         ).re(r"^([\d\.]+)\"")
         if len(reach) == 1:
-            profile["reach"] = to_meter(0, float(reach[0]))
+            ret["reach"] = to_meter(0, float(reach[0]))
 
         # Place of birth (optional)
         place_of_birth = profile_section.xpath(
             "./ul/li/strong[text()='Born:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
         if place_of_birth is not None and place_of_birth != "N/A":
-            profile["place_of_birth"] = []
+            ret["place_of_birth"] = []
             for p in place_of_birth.split(","):
-                profile["place_of_birth"].append(p.strip())
+                ret["place_of_birth"].append(p.strip())
 
         # Fighting out of (optional)
         # TODO: Clarify the difference place_of_birth vs out_of
@@ -275,44 +272,41 @@ class FightersSpider(scrapy.Spider):
             "./ul/li/strong[text()='Fighting out of:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
         if out_of is not None and out_of != "N/A":
-            profile["out_of"] = []
+            ret["out_of"] = []
             for o in out_of.split(","):
-                profile["out_of"].append(o.strip())
+                ret["out_of"].append(o.strip())
 
         # College (optional)
         college = profile_section.xpath(
             "./ul/li/strong[text()='College:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
         if college is not None and college != "N/A":
-            profile["college"] = college
+            ret["college"] = college
 
         # Foundation styles (optional)
         styles = profile_section.xpath(
             "./ul/li/strong[text()='Foundation Style:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
         if styles is not None and styles != "N/A":
-            profile["foundation_styles"] = []
+            ret["foundation_styles"] = []
             for s in styles.split(","):
-                profile["foundation_styles"].append(s.strip())
+                ret["foundation_styles"].append(s.strip())
 
         # Head Coach (optional)
         head_coach = profile_section.xpath(
             "./ul/li/strong[text()='Head Coach:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
-        if head_coach is not None and normalize_string(head_coach) != "n/a":
-            profile["head_coach"] = head_coach
+        if head_coach is not None and normalize_text(head_coach) != "n/a":
+            ret["head_coach"] = head_coach
 
         # Other Coaches (optional)
         other_coaches = profile_section.xpath(
             "./ul/li/strong[text()='Other Coaches:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
-        if other_coaches is not None and normalize_string(other_coaches) != "n/a":
-            profile["other_coaches"] = []
+        if other_coaches is not None and normalize_text(other_coaches) != "n/a":
+            ret["other_coaches"] = []
             for c in other_coaches.split(","):
-                profile["other_coaches"].append(c.strip())
-
-        # Set profile to the output dict
-        ret["profile"] = profile
+                ret["other_coaches"].append(c.strip())
 
         ###########################################################
         #
@@ -433,9 +427,6 @@ class FightersSpider(scrapy.Spider):
                     STATUS_LOSS,
                     STATUS_DRAW,
                 ]:
-                    # Stores details of the bout
-                    bout_details = {}
-
                     # Parse summary lead of the record
                     lead_section = pro_record_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='lead']"
@@ -460,7 +451,7 @@ class FightersSpider(scrapy.Spider):
                                     lambda x: x != "",
                                     map(
                                         lambda x: x.strip(),
-                                        normalize_string(lead).split("·"),
+                                        normalize_text(lead).split("·"),
                                     ),
                                 )
                             )
@@ -475,11 +466,11 @@ class FightersSpider(scrapy.Spider):
                                     if n == 2:
                                         # (win|loss|draw), (decision|finish)
                                         if l[1] == "decision":
-                                            bout_details["ended_by"] = {
+                                            item["ended_by"] = {
                                                 "type": "decision",
                                             }
                                         else:
-                                            bout_details["ended_by"] = {
+                                            item["ended_by"] = {
                                                 "type": infer(l[1]),
                                                 "detail": l[1],
                                             }
@@ -488,12 +479,12 @@ class FightersSpider(scrapy.Spider):
                                         # (win|loss|draw), decision, (majority|unanimous|split)
                                         t = infer(l[1])
                                         if t == "decision":
-                                            bout_details["ended_by"] = {
+                                            item["ended_by"] = {
                                                 "type": t,
                                                 "detail": l[2],
                                             }
                                         else:
-                                            bout_details["ended_by"] = {
+                                            item["ended_by"] = {
                                                 "type": t,
                                                 "detail": l[1],
                                             }
@@ -503,28 +494,28 @@ class FightersSpider(scrapy.Spider):
                                                     f"Unexpected format of round: {l[2]}"
                                                 )
                                             else:
-                                                bout_details["ended_at"] = {"round": r}
+                                                item["ended_at"] = {"round": r}
                                     elif n == 4:
                                         # (win|loss), finish, time, round
-                                        bout_details["ended_by"] = {
+                                        item["ended_by"] = {
                                             "type": infer(l[1]),
                                             "detail": l[1],
                                         }
                                         r, t = parse_round(l[3]), parse_time(l[2])
                                         if r is not None or t is not None:
-                                            bout_details["ended_at"] = {}
+                                            item["ended_at"] = {}
                                             if r is None:
                                                 self.logger.error(
                                                     f"Unexpected format of round: {l[3]}"
                                                 )
                                             else:
-                                                bout_details["ended_at"]["round"] = r
+                                                item["ended_at"]["round"] = r
                                             if t is None:
                                                 self.logger.error(
                                                     f"Unexpected format of time: {l[2]}"
                                                 )
                                             else:
-                                                bout_details["ended_at"]["time"] = t
+                                                item["ended_at"]["time"] = t
 
                     # Parse more data of the record
                     label_sections = pro_record_section.xpath(
@@ -540,7 +531,7 @@ class FightersSpider(scrapy.Spider):
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if billing is not None:
-                                bout_details["billing"] = billing
+                                item["billing"] = billing
                         elif label == "Duration:":
                             # Duration of the bout
                             txt = label_section.xpath(
@@ -549,7 +540,7 @@ class FightersSpider(scrapy.Spider):
                             if txt is not None:
                                 duration = parse_duration(txt)
                                 if duration is not None:
-                                    bout_details["duration"] = duration
+                                    item["duration"] = duration
                                 else:
                                     self.logger.error(
                                         f"Unexpected format of duration: {txt}"
@@ -560,7 +551,7 @@ class FightersSpider(scrapy.Spider):
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if referee is not None:
-                                bout_details["referee"] = referee
+                                item["referee"] = referee
                         elif label == "Weight:":
                             # Contracted limit & weigh-in weight
                             txt = label_section.xpath(
@@ -569,20 +560,16 @@ class FightersSpider(scrapy.Spider):
                             if txt is not None:
                                 weight = parse_weight(txt)
                                 if weight is not None:
-                                    bout_details["weight"] = weight
+                                    item["weight"] = weight
                                 else:
                                     self.logger.error(
                                         f"Unexpected format of weight: {txt}"
                                     )
-
-                    # Set bout details
-                    item["details"] = bout_details
-
                 ret["pro_records"].append(item)
         return ret
 
 
-def normalize_string(s: str, lower: bool = True) -> str:
+def normalize_text(s: str, lower: bool = True) -> str:
     temp = " ".join(s.split())
     if lower:
         temp = temp.lower()
@@ -590,7 +577,7 @@ def normalize_string(s: str, lower: bool = True) -> str:
 
 
 def normalize_status(status: str) -> Union[str, None]:
-    normed = normalize_string(status)
+    normed = normalize_text(status)
     if normed in VALUES_STATUS_WIN:
         return STATUS_WIN
     if normed in VALUES_STATUS_LOSS:
@@ -609,7 +596,7 @@ def normalize_status(status: str) -> Union[str, None]:
 
 
 def normalize_sport(sport: str) -> Union[str, None]:
-    normed = normalize_string(sport)
+    normed = normalize_text(sport)
     if normed in VALUES_SPORT_MMA:
         return SPORT_MMA
     if normed in VALUES_SPORT_KNUCKLE_MMA:
@@ -646,7 +633,7 @@ def normalize_sport(sport: str) -> Union[str, None]:
 
 
 def normalize_weight_class(weight_class: str) -> Union[str, None]:
-    normed = normalize_string(weight_class)
+    normed = normalize_text(weight_class)
     if normed == "atomweight":
         return WEIGHT_CLASS_ATOM
     if normed == "strawweight":
@@ -813,7 +800,7 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
 
 
 def parse_time(txt: str) -> Union[Dict[str, int], None]:
-    normed = normalize_string(txt)
+    normed = normalize_text(txt)
     matched = re.match(r"^(\d+):(\d+)$", normed)
     if matched:
         return {"m": int(matched.group(1)), "s": int(matched.group(2))}
@@ -821,7 +808,7 @@ def parse_time(txt: str) -> Union[Dict[str, int], None]:
 
 
 def parse_round(txt: str) -> Union[int, None]:
-    normed = normalize_string(txt)
+    normed = normalize_text(txt)
     matched = re.match(r"^r([1-9])$", normed)
     if matched:
         return int(matched.group(1))
@@ -861,7 +848,7 @@ def to_kg(lb: float) -> float:
 
 
 def infer(bout_ended_by: str) -> str:
-    normed = normalize_string(bout_ended_by)
+    normed = normalize_text(bout_ended_by)
     if normed == "decision":
         return "decision"
     if (
