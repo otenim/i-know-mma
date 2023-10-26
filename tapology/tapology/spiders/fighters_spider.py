@@ -565,6 +565,27 @@ class FightersSpider(scrapy.Spider):
                                     self.logger.error(
                                         f"Unexpected format of weight: {txt}"
                                     )
+                        elif label == "Odds:":
+                            # Odds of the fighter for the bout
+                            odds = label_section.xpath(
+                                "./following-sibling::span[1]/text()[normalize-space()]"
+                            ).re_first(r"([\+\-][\d\.]+)")
+                            if odds is not None:
+                                item["odds"] = float(odds)
+                        elif label == "Title Bout:":
+                            # Title info of the bout
+                            txt = label_section.xpath(
+                                "./following-sibling::span[1]/text()[normalize-space()]"
+                            ).get()
+                            if txt is not None:
+                                info = parse_title_info(txt)
+                                if info is not None:
+                                    item["title_info"] = info
+                                else:
+                                    self.logger.error(
+                                        f"Unexpected format of title info: {txt}"
+                                    )
+
                 ret["pro_records"].append(item)
         return ret
 
@@ -824,6 +845,19 @@ def parse_duration(txt: str) -> Union[List[int], None]:
         if matched.group(3) is None:
             return [int(matched.group(1)), int(matched.group(2))]
         return [int(matched.group(1)), int(matched.group(2)), int(matched.group(3))]
+    return None
+
+
+def parse_title_info(txt: str) -> Union[Dict[str, str], None]:
+    ret = {}
+
+    # champion|challenger|vacant · championship
+    # championship
+    l = list(filter(lambda s: s.strip(), normalize_text(txt).split("·")))
+    if len(l) == 1:
+        return {"championship": l[0]}
+    if len(l) == 2:
+        return {"championship": l[0], "as": l[1]}
     return None
 
 
