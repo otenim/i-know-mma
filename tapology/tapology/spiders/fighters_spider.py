@@ -729,10 +729,10 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
             w = float(matched.group(3))
             if matched.group(4).startswith("lb"):
                 w = to_kg(w)
-            if matched.group(2) != "":
-                ret["weigh_in"] = w
-            else:
+            if matched.group(2) is None:
                 ret["limit"] = w
+            else:
+                ret["weigh_in"] = w
             once = False
 
     # Heavyweight · 205 kg|kgs|lb|lbs (93.0 kg|kgs|lb|lbs) · Weigh-In 201.0 kg|kgs|lb|lbs (91.2 kg|kgs|lb|lbs)
@@ -799,25 +799,30 @@ def parse_round(txt: str) -> Union[int, None]:
 
 
 def parse_duration(txt: str) -> Union[List[int], None]:
-    # TODO: Need optimization
-    normed = txt.lower().strip()
-    matched = re.match(r"^(\d+) x (\d+) min", normed)
-    if matched:
-        return [int(matched.group(2))] * int(matched.group(1))
-    matched = re.match(r"^(\d+) min", normed)
-    if matched:
-        return [int(matched.group(1))]
-    matched = re.match(r"^(\d+)-(\d+)-(\d+)", normed)
-    if matched:
+    normed = normalize_text(txt)
+
+    # 5 min
+    # 2 x 5 min
+    matched = re.match(r"^(\d+)(?: x (\d+))? min", normed)
+    if matched is not None:
+        if matched.group(2) is None:
+            return [int(matched.group(1))]
+        return [int(matched.group(2)) for _ in range(int(matched.group(1)))]
+
+    # 5-5
+    # 5-5-5
+    matched = re.match(r"^(\d+)-(\d+)(?:-(\d+))?", normed)
+    if matched is not None:
+        if matched.group(3) is None:
+            return [int(matched.group(1)), int(matched.group(2))]
         return [int(matched.group(1)), int(matched.group(2)), int(matched.group(3))]
-    matched = re.match(r"^(\d+)-(\d+)", normed)
+
+    # 5 + 5
+    # 5 + 5 + 5
+    matched = re.match(r"^(\d+) \+ (\d+)(?: \+ (\d+))?", normed)
     if matched:
-        return [int(matched.group(1)), int(matched.group(2))]
-    matched = re.match(r"^(\d+) \+ (\d+)", normed)
-    if matched:
-        return [int(matched.group(1)), int(matched.group(2))]
-    matched = re.match(r"^(\d+) \+ (\d+) \+ (\d+)", normed)
-    if matched:
+        if matched.group(3) is None:
+            return [int(matched.group(1)), int(matched.group(2))]
         return [int(matched.group(1)), int(matched.group(2)), int(matched.group(3))]
     return None
 
