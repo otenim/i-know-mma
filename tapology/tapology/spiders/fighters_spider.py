@@ -700,84 +700,67 @@ def to_weight_class(value: float, unit: str = "kg", margin: float = 0.02) -> str
 
 
 def parse_weight(txt: str) -> Union[Dict[str, float], None]:
-    normed = txt.lower().strip()
+    normed = normalize_text(txt)
     weight_class = None
     ret = {}
     once = True
 
     # Heavyweight
-    # 110 (kgs?|lbs?)
-    if once:
-        matched = re.match(r"^(.*weight|[\d\.]+ (?:kgs?|lbs?))$", normed)
-        if matched:
-            weight_class = matched.group(1)
-            once = False
-
-    # 110 (kgs?|lbs?) (49.9 (kgs?|lbs?))
-    if once:
-        matched = re.match(r"^([\d\.]+ (?:kgs?|lbs?)) \(.*\)$", normed)
-        if matched:
-            weight_class = matched.group(1)
-            once = False
-
-    # Heavyweight · 120 (kgs?|lbs?) (264.6 (kgs?|lbs?))
+    # 110 kg|kgs|lb|lbs
+    # 110 kg|kgs|lb|lbs (49.9 kg|kgs|lb|lbs)
     if once:
         matched = re.match(
-            r"^(.*weight|[\d\.]+ (?:kgs?|lbs?)) · ([\d\.]+) (kgs?|lbs?) \(.*\)$",
-            normed,
+            r"^(.*weight|[\d\.]+ (?:kgs?|lbs?))(?: \([\d\.]+ (?:kgs?|lbs?)\))?$", normed
         )
-        if matched:
+        if matched is not None:
             weight_class = matched.group(1)
-            ret["limit"] = (
-                to_kg(float(matched.group(2)))
-                if matched.group(3).startswith("lb")
-                else float(matched.group(2))
-            )
             once = False
 
-    # Open Weight · Weigh-In 436.5 (kgs?|lbs?) (198.0 (kgs?|lbs?))
+    # Heavyweight · 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
+    # Heavyweight · Weigh-In 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
+    # Flyweight · 125 lbs (56.7 kg)
     if once:
         matched = re.match(
-            r"^(.*weight|[\d\.]+ (?:kgs?|lbs?)) · weigh-in ([\d\.]+) (kgs?|lbs?) \(.*\)$",
+            r"^(.*weight|[\d\.]+ (?:kgs?|lbs?))(?: \([\d\.]+ (?:kgs?|lbs?)\))? · (weigh-in )?([\d\.]+) (kgs?|lbs?) \([\d\.]+ (?:kgs?|lbs?)\)$",
             normed,
         )
-        if matched:
+        if matched is not None:
             weight_class = matched.group(1)
-            ret["weigh_in"] = (
-                to_kg(float(matched.group(2)))
-                if matched.group(3).startswith("lb")
-                else float(matched.group(2))
-            )
+            w = float(matched.group(3))
+            if matched.group(4).startswith("lb"):
+                w = to_kg(w)
+            if matched.group(2) != "":
+                ret["weigh_in"] = w
+            else:
+                ret["limit"] = w
             once = False
 
-    # Light Heavyweight · 205 (kgs?|lbs?) (93.0 (kgs?|lbs?)) · Weigh-In 201.0 (kgs?|lbs?) (91.2 (kgs?|lbs?))
+    # Heavyweight · 205 kg|kgs|lb|lbs (93.0 kg|kgs|lb|lbs) · Weigh-In 201.0 kg|kgs|lb|lbs (91.2 kg|kgs|lb|lbs)
     if once:
         matched = re.match(
-            r"^(.*weight|[\d\.]+ (?:kgs?|lbs?)) · ([\d\.]+) (kgs?|lbs?) \(.*\) · weigh-in ([\d\.]+) (kgs?|lbs?) \(.*\)$",
+            r"^(.*weight|[\d\.]+ (?:kgs?|lbs?))(?: \([\d\.]+ (?:kgs?|lbs?)\))? · ([\d\.]+) (kgs?|lbs?) \([\d\.]+ (?:kgs?|lbs?)\) · weigh-in ([\d\.]+) (kgs?|lbs?) \([\d\.]+ (?:kgs?|lbs?)\)$",
             normed,
         )
-        if matched:
+        if matched is not None:
             weight_class = matched.group(1)
-            ret["limit"] = (
-                to_kg(float(matched.group(2)))
-                if matched.group(3).startswith("lb")
-                else float(matched.group(2))
-            )
-            ret["weigh_in"] = (
-                to_kg(float(matched.group(4)))
-                if matched.group(5).startswith("lb")
-                else float(matched.group(4))
-            )
+            limit = float(matched.group(2))
+            if matched.group(3).startswith("lb"):
+                limit = to_kg(limit)
+            ret["limit"] = limit
+            weigh_in = float(matched.group(4))
+            if matched.group(5).startswith("lb"):
+                weigh_in = to_kg(weigh_in)
+            ret["weigh_in"] = weigh_in
             once = False
 
     # Normalize weight class
-    if weight_class:
+    if weight_class is not None:
         normed_weight_class = normalize_weight_class(weight_class)
-        if normed_weight_class:
+        if normed_weight_class is not None:
             ret["class"] = normed_weight_class
             return ret
         matched = re.match(r"^([\d\.]+) (kgs?|lbs?)$", weight_class)
-        if matched:
+        if matched is not None:
             # Infer weight class
             ret["class"] = to_weight_class(
                 float(matched.group(1)), unit=matched.group(2)
