@@ -13,9 +13,13 @@ WEIGHT_LIMIT_FLY = 56.699
 WEIGHT_LIMIT_BANTAM = 61.235
 WEIGHT_LIMIT_FEATHER = 65.7709
 WEIGHT_LIMIT_LIGHT = 70.3068
+WEIGHT_LIMIT_SUPER_LIGHT = 74.8427
 WEIGHT_LIMIT_WELTER = 77.1107
+WEIGHT_LIMIT_SUPER_WELTER = 79.3786647
 WEIGHT_LIMIT_MIDDLE = 83.9146
+WEIGHT_LIMIT_SUPER_MIDDLE = 88.4505
 WEIGHT_LIMIT_LIGHT_HEAVY = 92.9864
+WEIGHT_LIMIT_CRUISER = 102.058
 WEIGHT_LIMIT_HEAVY = 120.202
 
 
@@ -26,9 +30,13 @@ WEIGHT_CLASS_FLY = "fly"
 WEIGHT_CLASS_BANTAM = "bantam"
 WEIGHT_CLASS_FEATHER = "feather"
 WEIGHT_CLASS_LIGHT = "light"
+WEIGHT_CLASS_SUPER_LIGHT = "super_light"
 WEIGHT_CLASS_WELTER = "welter"
+WEIGHT_CLASS_SUPER_WELTER = "super_welter"
 WEIGHT_CLASS_MIDDLE = "middle"
+WEIGHT_CLASS_SUPER_MIDDLE = "super_middle"
 WEIGHT_CLASS_LIGHT_HEAVY = "light_heavy"
+WEIGHT_CLASS_CRUISER = "cruiser"
 WEIGHT_CLASS_HEAVY = "heavy"
 WEIGHT_CLASS_SUPER_HEAVY = "super_heavy"
 
@@ -52,7 +60,7 @@ SPORT_JUDO = "judo"
 SPORT_CUSTOM = "custom"
 
 
-# Expected values for bout's sport
+# Expected values of bout sports
 VALUES_SPORT_MMA = ["mma"]
 VALUES_SPORT_KNUCKLE_MMA = ["knuckle_mma"]
 VALUES_SPORT_BOX = ["boxing", "boxing_cage"]
@@ -120,15 +128,17 @@ class FightersSpider(scrapy.Spider):
     ) -> Generator[Request, None, None]:
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
         for fighter in fighters:
-            record = fighter.xpath("./td[7]/text()[normalize-space()]").get()
-            if record is None:
+            career_record = fighter.xpath("./td[7]/text()[normalize-space()]").get()
+            if career_record is None:
                 self.logger.error(
-                    "Unexpected page structure: could not find the mma record column on the fighters' list"
+                    "Unexpected page structure: could not find mma career record column on the fighters' list"
                 )
                 continue
-            matched = re.match(r"^(?:(Am) )?(\d+)-(\d+)-(\d+)(?:, \d+ NC)?$", record)
+            matched = re.match(
+                r"^(?:(Am) )?(\d+)-(\d+)-(\d+)(?:, \d+ NC)?$", career_record
+            )
             if matched is None:
-                self.logger.error(f"Unexpected mma record format was found: {record}")
+                self.logger.error(f"Unexpected mma record format: {career_record}")
                 continue
             if (SKIP_INEXPERIENCED_FIGHTERS or SKIP_AMATEUR_FIGHTERS) and matched.group(
                 1
@@ -218,7 +228,7 @@ class FightersSpider(scrapy.Spider):
             if normed is not None:
                 profile["weight_class"] = normed
             else:
-                self.logger.error(f"Unexpected weight class was found: {weight_class}")
+                self.logger.error(f"Unexpected weight class: {weight_class}")
 
         # Affiliation (optional)
         affili_section = profile_section.xpath(
@@ -306,7 +316,7 @@ class FightersSpider(scrapy.Spider):
 
         ###########################################################
         #
-        # Scrape pro bout records
+        # Scrape pro records
         #
         ###########################################################
         pro_record_sections = response.xpath(
@@ -315,10 +325,10 @@ class FightersSpider(scrapy.Spider):
         if len(pro_record_sections) > 0:
             ret["pro_records"] = []
             for pro_record_section in pro_record_sections:
-                # Stores a single bout data
+                # Stores data for a single record
                 item = {}
 
-                # NOTE: Skip ineligible bouts
+                # NOTE: Skip inegligible records
                 non_mma = pro_record_section.xpath(
                     "./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text()[normalize-space()]"
                 ).get()
@@ -334,13 +344,13 @@ class FightersSpider(scrapy.Spider):
                     continue
                 normed_sport = normalize_sport(sport)
                 if normed_sport is None:
-                    self.logger.error(f"Unexpected sport value was found: {sport}")
+                    self.logger.error(f"Unexpected sport value: {sport}")
                     continue
                 if normed_sport in SPORTS_TO_SKIP:
                     continue
                 item["sport"] = normed_sport
 
-                # Status of the bout (must)
+                # Status of the record (must)
                 status = pro_record_section.xpath("./@data-status").get()
                 if status is None:
                     self.logger.error(
@@ -349,13 +359,13 @@ class FightersSpider(scrapy.Spider):
                     continue
                 normed_status = normalize_status(status)
                 if normed_status is None:
-                    self.logger.error(f"Unexpected status value was found: {status}")
+                    self.logger.error(f"Unexpected status value: {status}")
                     continue
                 if normed_status in STATUS_TO_SKIP:
                     continue
                 item["status"] = normed_status
 
-                # Opponent fighter (must)
+                # Opponent fighter of the bout (must)
                 opponent_section = pro_record_section.xpath(
                     "./div[@class='result']/div[@class='opponent']"
                 )
@@ -366,7 +376,7 @@ class FightersSpider(scrapy.Spider):
                     continue
                 item["opponent"] = {}
 
-                # Opponent's name (at least name must be provided)
+                # Name & link of the opponent fighter (at least name must be provided)
                 a = opponent_section.xpath("./div[@class='name']/a")
                 has_opponent_url = False if len(a) == 0 else True
                 if has_opponent_url:
@@ -415,7 +425,7 @@ class FightersSpider(scrapy.Spider):
                                 "d": int(opponent_record[2].strip()),
                             }
 
-                # Bout summary (optional)
+                # Details of the bout (optional)
                 # NOTE: For now, scrape only mma bouts (not tagged as "nonMma")
                 # with status win, loss, or draw
                 if non_mma is None and normed_status in [
@@ -423,6 +433,10 @@ class FightersSpider(scrapy.Spider):
                     STATUS_LOSS,
                     STATUS_DRAW,
                 ]:
+                    # Stores details of the bout
+                    bout_details = {}
+
+                    # Parse summary lead of the record
                     lead_section = pro_record_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='lead']"
                     )
@@ -458,15 +472,14 @@ class FightersSpider(scrapy.Spider):
                             else:
                                 # NOTE: Skip when only bout status is available
                                 if n != 1:
-                                    item["details"] = {}
                                     if n == 2:
                                         # (win|loss|draw), (decision|finish)
                                         if l[1] == "decision":
-                                            item["details"]["ended_by"] = {
+                                            bout_details["ended_by"] = {
                                                 "type": "decision",
                                             }
                                         else:
-                                            item["details"]["ended_by"] = {
+                                            bout_details["ended_by"] = {
                                                 "type": infer(l[1]),
                                                 "detail": l[1],
                                             }
@@ -475,12 +488,12 @@ class FightersSpider(scrapy.Spider):
                                         # (win|loss|draw), decision, (majority|unanimous|split)
                                         t = infer(l[1])
                                         if t == "decision":
-                                            item["details"]["ended_by"] = {
+                                            bout_details["ended_by"] = {
                                                 "type": t,
                                                 "detail": l[2],
                                             }
                                         else:
-                                            item["details"]["ended_by"] = {
+                                            bout_details["ended_by"] = {
                                                 "type": t,
                                                 "detail": l[1],
                                             }
@@ -490,35 +503,30 @@ class FightersSpider(scrapy.Spider):
                                                     f"Unexpected format of round: {l[2]}"
                                                 )
                                             else:
-                                                item["details"]["ended_at"] = {
-                                                    "round": r
-                                                }
+                                                bout_details["ended_at"] = {"round": r}
                                     elif n == 4:
                                         # (win|loss), finish, time, round
-                                        item["details"]["ended_by"] = {
+                                        bout_details["ended_by"] = {
                                             "type": infer(l[1]),
                                             "detail": l[1],
                                         }
                                         r, t = parse_round(l[3]), parse_time(l[2])
                                         if r is not None or t is not None:
-                                            item["details"]["ended_at"] = {}
+                                            bout_details["ended_at"] = {}
                                             if r is None:
                                                 self.logger.error(
                                                     f"Unexpected format of round: {l[3]}"
                                                 )
                                             else:
-                                                item["details"]["ended_at"]["round"] = r
+                                                bout_details["ended_at"]["round"] = r
                                             if t is None:
                                                 self.logger.error(
                                                     f"Unexpected format of time: {l[2]}"
                                                 )
                                             else:
-                                                item["details"]["ended_at"]["time"] = t
+                                                bout_details["ended_at"]["time"] = t
 
-                # Bout details
-                # NOTE: For now, scrape only mma bouts (not tagged as "nonMma")
-                # with status win or loss
-                if non_mma is None and normed_status in [STATUS_WIN, STATUS_LOSS]:
+                    # Parse more data of the record
                     label_sections = pro_record_section.xpath(
                         "./div[@class='details tall']/div[@class='div']/span[@class='label']"
                     )
@@ -526,44 +534,50 @@ class FightersSpider(scrapy.Spider):
                         label = label_section.xpath("./text()[normalize-space()]").get()
                         if label is None:
                             continue
-                        label = label.strip()
                         if label == "Billing:":
-                            # "Main Event", "Main Card", "Preliminary Card"
+                            # Billing of the bout
                             billing = label_section.xpath(
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
-                            if billing:
-                                item["billing"] = billing.strip()
+                            if billing is not None:
+                                bout_details["billing"] = billing
                         elif label == "Duration:":
+                            # Duration of the bout
                             txt = label_section.xpath(
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
-                            if txt:
+                            if txt is not None:
                                 duration = parse_duration(txt)
-                                if duration:
-                                    item["duration"] = duration
+                                if duration is not None:
+                                    bout_details["duration"] = duration
                                 else:
                                     self.logger.error(
-                                        f"Unexpected format of duration section: {txt}"
+                                        f"Unexpected format of duration: {txt}"
                                     )
                         elif label == "Referee:":
+                            # Name of the referee
                             referee = label_section.xpath(
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
-                            if referee:
-                                item["referee"] = referee.strip()
+                            if referee is not None:
+                                bout_details["referee"] = referee
                         elif label == "Weight:":
+                            # Contracted limit & weigh-in weight
                             txt = label_section.xpath(
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
-                            if txt:
+                            if txt is not None:
                                 weight = parse_weight(txt)
-                                if weight:
-                                    item["weight"] = weight
+                                if weight is not None:
+                                    bout_details["weight"] = weight
                                 else:
                                     self.logger.error(
-                                        f"Unexpected format of weight section: {txt}"
+                                        f"Unexpected format of weight: {txt}"
                                     )
+
+                    # Set bout details
+                    item["details"] = bout_details
+
                 ret["pro_records"].append(item)
         return ret
 
@@ -679,12 +693,20 @@ def to_weight_class(value: float, unit: str = "kg", margin: float = 0.02) -> str
         return WEIGHT_CLASS_FEATHER
     if kg <= WEIGHT_LIMIT_LIGHT * scale:
         return WEIGHT_CLASS_LIGHT
+    if kg <= WEIGHT_LIMIT_SUPER_LIGHT * scale:
+        return WEIGHT_CLASS_SUPER_LIGHT
     if kg <= WEIGHT_LIMIT_WELTER * scale:
         return WEIGHT_CLASS_WELTER
+    if kg <= WEIGHT_LIMIT_SUPER_WELTER * scale:
+        return WEIGHT_CLASS_SUPER_WELTER
     if kg <= WEIGHT_LIMIT_MIDDLE * scale:
         return WEIGHT_CLASS_MIDDLE
+    if kg <= WEIGHT_LIMIT_SUPER_MIDDLE:
+        return WEIGHT_CLASS_SUPER_MIDDLE
     if kg <= WEIGHT_LIMIT_LIGHT_HEAVY * scale:
         return WEIGHT_CLASS_LIGHT_HEAVY
+    if kg <= WEIGHT_LIMIT_CRUISER * scale:
+        return WEIGHT_CLASS_CRUISER
     if kg <= WEIGHT_LIMIT_HEAVY * scale:
         return WEIGHT_CLASS_HEAVY
     return WEIGHT_CLASS_SUPER_HEAVY
