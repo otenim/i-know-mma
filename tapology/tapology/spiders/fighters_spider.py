@@ -82,11 +82,11 @@ STATUS_UNKNOWN = "unknown"
 
 
 # Expected values for bout's status
-VALUES_STATUS_WIN = ["win", "won", "w"]
-VALUES_STATUS_LOSS = ["loss", "lose", "lost", "l"]
-VALUES_STATUS_CANCELLED = ["cancelled", "c"]
+VALUES_STATUS_WIN = ["win", "w"]
+VALUES_STATUS_LOSS = ["loss", "l"]
+VALUES_STATUS_CANCELLED = ["cancelled", "cancelled bout", "c"]
 VALUES_STATUS_DRAW = ["draw", "d"]
-VALUES_STATUS_UPCOMING = ["upcoming"]
+VALUES_STATUS_UPCOMING = ["upcoming", "confirmed upcoming bout"]
 VALUES_STATUS_NO_CONTEST = ["no contest", "no_contest", "nocontest"]
 VALUES_STATUS_UNKNOWN = ["unknown"]
 
@@ -417,8 +417,12 @@ class FightersSpider(scrapy.Spider):
 
                 # Bout summary (optional)
                 # NOTE: For now, scrape only mma bouts (not tagged as "nonMma")
-                # with status win or loss
-                if non_mma is None and normed_status in [STATUS_WIN, STATUS_LOSS]:
+                # with status win, loss, or draw
+                if non_mma is None and normed_status in [
+                    STATUS_WIN,
+                    STATUS_LOSS,
+                    STATUS_DRAW,
+                ]:
                     lead_section = pro_record_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='lead']"
                     )
@@ -440,7 +444,10 @@ class FightersSpider(scrapy.Spider):
                             l = list(
                                 filter(
                                     lambda x: x != "",
-                                    map(lambda x: x.strip(), lead.split("·")),
+                                    map(
+                                        lambda x: x.strip(),
+                                        normalize_string(lead).split("·"),
+                                    ),
                                 )
                             )
                             n = len(l)
@@ -449,17 +456,23 @@ class FightersSpider(scrapy.Spider):
                                     f"Unexpected format of summary lead text: {lead}"
                                 )
                             else:
+                                # NOTE: Skip when only bout status is available
                                 if n != 1:
                                     item["details"] = {}
                                     if n == 2:
-                                        # (Win|Loss), Finish
-                                        item["details"]["ended_by"] = {
-                                            "type": infer(l[1]),
-                                            "detail": l[1],
-                                        }
+                                        # (win|loss|draw), (decision|finish)
+                                        if l[1] == "decision":
+                                            item["details"]["ended_by"] = {
+                                                "type": "decision",
+                                            }
+                                        else:
+                                            item["details"]["ended_by"] = {
+                                                "type": infer(l[1]),
+                                                "detail": l[1],
+                                            }
                                     elif n == 3:
-                                        # (Win|Loss), Finish, Round
-                                        # (Win|Loss), Decision, (Majority|Unanimous|Split)
+                                        # (win|loss), finish, round
+                                        # (win|loss|draw), decision, (majority|unanimous|split)
                                         t = infer(l[1])
                                         if t == "decision":
                                             item["details"]["ended_by"] = {
@@ -472,12 +485,16 @@ class FightersSpider(scrapy.Spider):
                                                 "detail": l[1],
                                             }
                                             r = parse_round(l[2])
-                                            if r is not None:
+                                            if r is None:
+                                                self.logger.error(
+                                                    f"Unexpected format of round: {l[2]}"
+                                                )
+                                            else:
                                                 item["details"]["ended_at"] = {
                                                     "round": r
                                                 }
                                     elif n == 4:
-                                        # (Win|Loss), Finish, Time, Round
+                                        # (win|loss), finish, time, round
                                         item["details"]["ended_by"] = {
                                             "type": infer(l[1]),
                                             "detail": l[1],
@@ -485,9 +502,17 @@ class FightersSpider(scrapy.Spider):
                                         r, t = parse_round(l[3]), parse_time(l[2])
                                         if r is not None or t is not None:
                                             item["details"]["ended_at"] = {}
-                                            if r is not None:
+                                            if r is None:
+                                                self.logger.error(
+                                                    f"Unexpected format of round: {l[3]}"
+                                                )
+                                            else:
                                                 item["details"]["ended_at"]["round"] = r
-                                            if t is not None:
+                                            if t is None:
+                                                self.logger.error(
+                                                    f"Unexpected format of time: {l[2]}"
+                                                )
+                                            else:
                                                 item["details"]["ended_at"]["time"] = t
 
                 # Bout details
@@ -766,7 +791,7 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
 
 
 def parse_time(txt: str) -> Union[Dict[str, int], None]:
-    normed = txt.strip()
+    normed = normalize_string(txt)
     matched = re.match(r"^(\d+):(\d+)$", normed)
     if matched:
         return {"m": int(matched.group(1)), "s": int(matched.group(2))}
@@ -774,7 +799,7 @@ def parse_time(txt: str) -> Union[Dict[str, int], None]:
 
 
 def parse_round(txt: str) -> Union[int, None]:
-    normed = txt.lower().strip()
+    normed = normalize_string(txt)
     matched = re.match(r"^r([1-9])$", normed)
     if matched:
         return int(matched.group(1))
@@ -782,14 +807,12 @@ def parse_round(txt: str) -> Union[int, None]:
 
 
 def parse_duration(txt: str) -> Union[List[int], None]:
+    # TODO: Need optimization
     normed = txt.lower().strip()
     matched = re.match(r"^(\d+) x (\d+) min", normed)
     if matched:
         return [int(matched.group(2))] * int(matched.group(1))
-    matched = re.match(r"^(\d+) min one round", normed)
-    if matched:
-        return [int(matched.group(1))]
-    matched = re.match(r"^(\d+) min round plus overtime", normed)
+    matched = re.match(r"^(\d+) min", normed)
     if matched:
         return [int(matched.group(1))]
     matched = re.match(r"^(\d+)-(\d+)-(\d+)", normed)
@@ -816,7 +839,7 @@ def to_kg(lb: float) -> float:
 
 
 def infer(bout_ended_by: str) -> str:
-    normed = bout_ended_by.strip().lower()
+    normed = normalize_string(bout_ended_by)
     if normed == "decision":
         return "decision"
     if (
