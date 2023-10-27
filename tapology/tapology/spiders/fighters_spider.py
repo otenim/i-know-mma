@@ -57,6 +57,7 @@ SPORT_WRESTLE = "wrestle"
 SPORT_SAMBO = "sambo"
 SPORT_VALE = "vale"
 SPORT_JUDO = "judo"
+SPORT_COMBAT_JIU_JITSU = "combat_jiu_jitsu"
 SPORT_CUSTOM = "custom"
 
 
@@ -76,6 +77,7 @@ VALUES_SPORT_WRESTLE = ["wrestling"]
 VALUES_SPORT_SAMBO = ["sambo"]
 VALUES_SPORT_VALE = ["valetudo"]
 VALUES_SPORT_JUDO = ["judo"]
+VALUES_SPORT_COMBAT_JIU_JITSU = ["combat_jj"]
 VALUES_SPORT_CUSTOM = ["custom"]
 
 
@@ -648,6 +650,8 @@ def normalize_sport(sport: str) -> Union[str, None]:
         return SPORT_VALE
     if normed in VALUES_SPORT_JUDO:
         return SPORT_JUDO
+    if normed in VALUES_SPORT_COMBAT_JIU_JITSU:
+        return SPORT_COMBAT_JIU_JITSU
     if normed in VALUES_SPORT_CUSTOM:
         return SPORT_CUSTOM
     return None
