@@ -857,11 +857,11 @@ def parse_title_info(txt: str) -> Union[Dict[str, str], None]:
 
     # champion|challenger|vacant · championship
     # championship
-    l = list(filter(lambda s: s.strip(), normalize_text(txt).split("·")))
+    l = list(map(lambda s: s.strip(), normalize_text(txt).split("·")))
     if len(l) == 1:
         return {"championship": l[0]}
     if len(l) == 2:
-        return {"championship": l[0], "as": l[1]}
+        return {"championship": l[1], "as": l[0]}
     return None
 
 
