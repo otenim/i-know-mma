@@ -223,7 +223,7 @@ class FightersSpider(scrapy.Spider):
             url = promo_section.xpath("./@href").get()
             if name is not None and url is not None:
                 ret["promotion"] = {"name": name, "url": url}
-        yield ret
+        return ret
 
     def parse_fighter(self, response: TextResponse):
         ret = {}
@@ -482,9 +482,8 @@ class FightersSpider(scrapy.Spider):
                             if title == "Promotion Page":
                                 item["event"] = {"promotion": {"name": txt, "url": url}}
                             elif title == "Event Page":
-                                event = response.follow(url, callback=self.parse_event)
-                                if event is not None:
-                                    item["event"] = event
+                                req = response.follow(url, callback=self.parse_event)
+                                print(req)
 
                 # Record before the fight (optional)
                 # NOTE: available when the bout is not tagged as "nonMma"
