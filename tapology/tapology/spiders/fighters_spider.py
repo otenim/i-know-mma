@@ -169,6 +169,62 @@ class FightersSpider(scrapy.Spider):
         if next_url is not None:
             yield response.follow(next_url, callback=self.parse_fighter_list)
 
+    def parse_event(self, response: TextResponse) -> Union[Dict, None]:
+        ret = {}
+        ret["url"] = response.url
+
+        # Event name (must)
+        name = response.xpath(
+            "//div[@class='eventPageHeaderTitles']/h1/text()[normalize-space()]"
+        ).get()
+        if name is not None:
+            ret["name"] = name
+        else:
+            self.logger.error(
+                "Unexpected page structure: could not identify the name of the event"
+            )
+            return
+
+        # Info of the event (must)
+        details_section = response.xpath(
+            "//div[@class='details details_with_poster clearfix']/div[@class='right']/ul[@class='clearfix']"
+        )
+        if len(details_section) == 0:
+            self.logger.error(
+                "Unexpected page structure: could not find the detail section of the event"
+            )
+            return
+
+        # Location of the event (optional)
+        location_section = details_section.xpath(
+            "./li/strong[text()='Location:']/following-sibling::span[1]"
+        )
+        if len(location_section) == 1:
+            a = location_section.xpath("./a")
+            if len(a) > 0:
+                location = a.xpath("./text()[normalize-space()]").get()
+                if location is not None:
+                    ret["location"] = list(
+                        map(lambda s: s.strip(), location.split(","))
+                    )
+            else:
+                location = location_section.xpath("./text()[normalize-space()]").get()
+                if location is not None:
+                    ret["location"] = list(
+                        map(lambda s: s.strip(), location.split(","))
+                    )
+
+        # Promotion of the event (optional)
+        promo_section = details_section.xpath(
+            "./li/strong[text()='Promotion:']/following-sibling::span[1]/a"
+        )
+        if len(promo_section) == 1:
+            name = promo_section.xpath("./text()[normalize-space()]").get()
+            url = promo_section.xpath("./@href").get()
+            if name is not None and url is not None:
+                ret["promotion"] = {"name": name, "url": url}
+        yield ret
+
     def parse_fighter(self, response: TextResponse):
         ret = {}
 
@@ -361,6 +417,21 @@ class FightersSpider(scrapy.Spider):
                     continue
                 item["status"] = normed_status
 
+                # Date of the fight (must)
+                txt = pro_record_section.xpath(
+                    "./div[@class='result']/div[@class='date']/text()[normalize-space()]"
+                ).get()
+                if txt is None:
+                    self.logger.error(
+                        "Unexpected page structure: could not identify the date of the bout"
+                    )
+                    continue
+                date_normed = parse_date(txt)
+                if date_normed is None:
+                    self.logger.error(f"Unexpected format of date: {txt}")
+                    continue
+                item["date"] = date_normed
+
                 # Opponent fighter of the bout (must)
                 opponent_section = pro_record_section.xpath(
                     "./div[@class='result']/div[@class='opponent']"
@@ -393,10 +464,35 @@ class FightersSpider(scrapy.Spider):
                         continue
                     item["opponent"]["name"] = name
 
+                # Event of the fight (optional)
+                # NOTE: available when the status is not "cancelled" and "unknown"
+                # Handle only mma promotions
+                if non_mma is None and normed_status not in [
+                    STATUS_CANCELLED,
+                    STATUS_UNKNOWN,
+                ]:
+                    section = pro_record_section.xpath(
+                        "./div[@class='result']/div[@class='summary']/div[@class='notes']/a"
+                    )
+                    if len(section) == 1:
+                        title = section.xpath("./@title").get()
+                        url = section.xpath("./@href").get()
+                        txt = section.xpath("./text()[normalize-space()]").get()
+                        if title is not None and url is not None and txt is not None:
+                            if title == "Promotion Page":
+                                item["event"] = {"promotion": {"name": txt, "url": url}}
+                            elif title == "Event Page":
+                                event = response.follow(url, callback=self.parse_event)
+                                if event is not None:
+                                    item["event"] = event
+
                 # Record before the fight (optional)
                 # NOTE: available when the bout is not tagged as "nonMma"
-                # and its status is not "cancelled"
-                if non_mma is None and normed_status != STATUS_CANCELLED:
+                # and its status is not "cancelled" and "unknown"
+                if non_mma is None and normed_status not in [
+                    STATUS_CANCELLED,
+                    STATUS_UNKNOWN,
+                ]:
                     section = opponent_section.xpath("./div[@class='record']")
                     fighter_record = section.xpath(
                         "./span[@title='Fighter Record Before Fight']/text()[normalize-space()]"
@@ -805,6 +901,18 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
             elif weight_class.startswith("catch"):
                 ret["class"] = "catch"
     return None if ret == {} else ret
+
+
+def parse_date(txt: str) -> Union[Dict[str, int], None]:
+    normed = normalize_text(txt)
+    matched = re.match(r"^(\d+)\.(\d+)\.(\d+)$", normed)
+    if matched is not None:
+        return {
+            "y": int(matched.group(1)),
+            "m": int(matched.group(2)),
+            "d": int(matched.group(3)),
+        }
+    return None
 
 
 def parse_time(txt: str) -> Union[Dict[str, int], None]:
