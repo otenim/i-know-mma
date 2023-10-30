@@ -169,62 +169,6 @@ class FightersSpider(scrapy.Spider):
         if next_url is not None:
             yield response.follow(next_url, callback=self.parse_fighter_list)
 
-    def parse_event(self, response: TextResponse) -> Union[Dict, None]:
-        ret = {}
-        ret["url"] = response.url
-
-        # Event name (must)
-        name = response.xpath(
-            "//div[@class='eventPageHeaderTitles']/h1/text()[normalize-space()]"
-        ).get()
-        if name is not None:
-            ret["name"] = name
-        else:
-            self.logger.error(
-                "Unexpected page structure: could not identify the name of the event"
-            )
-            return
-
-        # Info of the event (must)
-        details_section = response.xpath(
-            "//div[@class='details details_with_poster clearfix']/div[@class='right']/ul[@class='clearfix']"
-        )
-        if len(details_section) == 0:
-            self.logger.error(
-                "Unexpected page structure: could not find the detail section of the event"
-            )
-            return
-
-        # Location of the event (optional)
-        location_section = details_section.xpath(
-            "./li/strong[text()='Location:']/following-sibling::span[1]"
-        )
-        if len(location_section) == 1:
-            a = location_section.xpath("./a")
-            if len(a) > 0:
-                location = a.xpath("./text()[normalize-space()]").get()
-                if location is not None:
-                    ret["location"] = list(
-                        map(lambda s: s.strip(), location.split(","))
-                    )
-            else:
-                location = location_section.xpath("./text()[normalize-space()]").get()
-                if location is not None:
-                    ret["location"] = list(
-                        map(lambda s: s.strip(), location.split(","))
-                    )
-
-        # Promotion of the event (optional)
-        promo_section = details_section.xpath(
-            "./li/strong[text()='Promotion:']/following-sibling::span[1]/a"
-        )
-        if len(promo_section) == 1:
-            name = promo_section.xpath("./text()[normalize-space()]").get()
-            url = promo_section.xpath("./@href").get()
-            if name is not None and url is not None:
-                ret["promotion"] = {"name": name, "url": url}
-        return ret
-
     def parse_fighter(self, response: TextResponse):
         ret = {}
 
@@ -464,7 +408,7 @@ class FightersSpider(scrapy.Spider):
                         continue
                     item["opponent"]["name"] = name
 
-                # Event of the fight (optional)
+                # Promotion of the fight (optional)
                 # NOTE: available when the status is not "cancelled" and "unknown"
                 # Handle only mma promotions
                 if non_mma is None and normed_status not in [
@@ -476,14 +420,16 @@ class FightersSpider(scrapy.Spider):
                     )
                     if len(section) == 1:
                         title = section.xpath("./@title").get()
-                        url = section.xpath("./@href").get()
                         txt = section.xpath("./text()[normalize-space()]").get()
-                        if title is not None and url is not None and txt is not None:
+                        if title is not None and txt is not None:
                             if title == "Promotion Page":
-                                item["event"] = {"promotion": {"name": txt, "url": url}}
-                            elif title == "Event Page":
-                                req = response.follow(url, callback=self.parse_event)
-                                print(req)
+                                item["promotion"] = txt
+                    if "promotion" not in item:
+                        txt = pro_record_section.xpath(
+                            "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/img/@alt"
+                        ).get()
+                        if txt is not None:
+                            item["promotion"] = txt
 
                 # Record before the fight (optional)
                 # NOTE: available when the bout is not tagged as "nonMma"
