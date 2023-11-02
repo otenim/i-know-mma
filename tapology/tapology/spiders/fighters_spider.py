@@ -195,7 +195,7 @@ class FightersSpider(scrapy.Spider):
         # Fighter's nickname (optional)
         nickname = response.xpath(
             "//div[@class='fighterUpcomingHeader']/h4[@class='preTitle nickname']/text()[normalize-space()]"
-        ).re_first(r"^\"(.*)\"$")
+        ).re_first(r"\"(.*)\"")
         if nickname is not None:
             ret["nickname"] = nickname
 
@@ -420,15 +420,15 @@ class FightersSpider(scrapy.Spider):
                     )
                     if len(section) == 1:
                         title = section.xpath("./@title").get()
-                        promo = section.xpath("./@href").re(r".*/\d+\-(.+)$")
-                        if title == "Promotion Page" and len(promo) == 1:
-                            item["promotion"] = promo[0]
+                        promo = section.xpath("./@href").re_first(r".*/\d+\-(.+)$")
+                        if title == "Promotion Page" and promo is not None:
+                            item["promotion"] = promo
                     if "promotion" not in item:
                         promo = pro_record_section.xpath(
                             "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/@href"
-                        ).re(r".*/\d+\-(.+)$")
-                        if len(promo) == 1:
-                            item["promotion"] = promo[0]
+                        ).re_first(r".*/\d+\-(.+)$")
+                        if promo is not None:
+                            item["promotion"] = promo
 
                 # Record before the fight (optional)
                 # NOTE: available when the bout is not tagged as "nonMma"
