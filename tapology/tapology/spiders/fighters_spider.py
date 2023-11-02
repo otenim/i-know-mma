@@ -468,28 +468,32 @@ class FightersSpider(scrapy.Spider):
                     STATUS_UNKNOWN,
                 ]:
                     section = opponent_section.xpath("./div[@class='record']")
-                    fighter_record = section.xpath(
+                    txt = section.xpath(
                         "./span[@title='Fighter Record Before Fight']/text()[normalize-space()]"
-                    ).re(r"(\d+)-(\d+)-(\d+)")
-                    if len(fighter_record) == 3:
-                        item["record_before"] = {
-                            "w": int(fighter_record[0].strip()),
-                            "l": int(fighter_record[1].strip()),
-                            "d": int(fighter_record[2].strip()),
-                        }
+                    ).get()
+                    if txt is not None:
+                        fighter_record = parse_record(txt)
+                        if fighter_record is not None:
+                            item["record_before"] = fighter_record
+                        else:
+                            self.logger.error(
+                                f"Unexpected format of fighter record: {txt}"
+                            )
 
                     # NOTE: Opponent record is available
                     # when the opponent name has a link
                     if has_opponent_url:
-                        opponent_record = section.xpath(
+                        txt = section.xpath(
                             "./span[@title='Opponent Record Before Fight']/text()[normalize-space()]"
-                        ).re(r"(\d+)-(\d+)-(\d+)")
-                        if len(opponent_record) == 3:
-                            item["opponent"]["record_before"] = {
-                                "w": int(opponent_record[0].strip()),
-                                "l": int(opponent_record[1].strip()),
-                                "d": int(opponent_record[2].strip()),
-                            }
+                        ).get()
+                        if txt is not None:
+                            opponent_record = parse_record(txt)
+                            if opponent_record is not None:
+                                item["opponent"]["record_before"] = opponent_record
+                            else:
+                                self.logger.error(
+                                    f"Unexpected format of opponent record: {txt}"
+                                )
 
                 # Details of the bout (optional)
                 # NOTE: For now, scrape only mma bouts (not tagged as "nonMma")
@@ -892,6 +896,18 @@ def parse_date(txt: str) -> Union[Dict[str, int], None]:
         return {
             "y": int(matched.group(1)),
             "m": int(matched.group(2)),
+            "d": int(matched.group(3)),
+        }
+    return None
+
+
+def parse_record(txt: str) -> Union[Dict[str, int], None]:
+    normed = normalize_text(txt)
+    matched = re.match(r"^(\d+)-(\d+)-(\d+)", normed)
+    if matched is not None:
+        return {
+            "w": int(matched.group(1)),
+            "l": int(matched.group(2)),
             "d": int(matched.group(3)),
         }
     return None
