@@ -420,16 +420,15 @@ class FightersSpider(scrapy.Spider):
                     )
                     if len(section) == 1:
                         title = section.xpath("./@title").get()
-                        txt = section.xpath("./text()[normalize-space()]").get()
-                        if title is not None and txt is not None:
-                            if title == "Promotion Page":
-                                item["promotion"] = txt
+                        promo = section.xpath("./@href").re(r".*/\d+\-(.+)$")
+                        if title == "Promotion Page" and len(promo) == 1:
+                            item["promotion"] = promo
                     if "promotion" not in item:
-                        txt = pro_record_section.xpath(
-                            "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/img/@alt"
-                        ).get()
-                        if txt is not None:
-                            item["promotion"] = txt
+                        promo = pro_record_section.xpath(
+                            "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/@href"
+                        ).re(r".*/\d+\-(.+)$")
+                        if len(promo) == 1:
+                            item["promotion"] = promo
 
                 # Record before the fight (optional)
                 # NOTE: available when the bout is not tagged as "nonMma"
