@@ -418,7 +418,7 @@ class FightersSpider(scrapy.Spider):
                         item["opponent"]["url"] = url
                         item["opponent"]["id"] = parse_id_from_url(url)
                     if name is not None:
-                        item["opponent"]["name"] = name
+                        item["opponent"]["name"] = normalize_text(name)
                 else:
                     name = opponent_section.xpath(
                         "./div[@class='name']/span/text()[normalize-space()]"
@@ -428,7 +428,7 @@ class FightersSpider(scrapy.Spider):
                             "Unexpected page structure: could not find opponent's name"
                         )
                         continue
-                    item["opponent"]["name"] = name
+                    item["opponent"]["name"] = normalize_text(name)
 
                 # Promotion of the fight (optional)
                 # NOTE: available when the status is not "cancelled" and "unknown"
@@ -603,7 +603,7 @@ class FightersSpider(scrapy.Spider):
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if billing is not None:
-                                item["billing"] = billing
+                                item["billing"] = normalize_text(billing)
                         elif label == "Duration:":
                             # Duration of the bout
                             txt = label_section.xpath(
@@ -623,7 +623,7 @@ class FightersSpider(scrapy.Spider):
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if referee is not None:
-                                item["referee"] = referee
+                                item["referee"] = normalize_text(referee)
                         elif label == "Weight:":
                             # Contracted limit & weigh-in weight
                             txt = label_section.xpath(
@@ -657,7 +657,6 @@ class FightersSpider(scrapy.Spider):
                                     self.logger.error(
                                         f"Unexpected format of title info: {txt}"
                                     )
-
                 ret["pro_records"].append(item)
         return ret
 
