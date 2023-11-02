@@ -101,6 +101,10 @@ VALUES_STATUS_NO_CONTEST = ["no contest"]
 VALUES_STATUS_UNKNOWN = ["unknown"]
 
 
+# Values meaning "not available"
+VALUES_NOT_AVAILABLE = ["n/a"]
+
+
 # Configs
 STATUS_TO_SKIP = [
     STATUS_CANCELLED,
@@ -188,7 +192,7 @@ class FightersSpider(scrapy.Spider):
                 "Unexpected page structure: could not find the fighter's name"
             )
             return
-        ret["name"] = name
+        ret["name"] = normalize_text(name)
 
         ###########################################################
         #
@@ -198,9 +202,9 @@ class FightersSpider(scrapy.Spider):
         # Fighter's nickname (optional)
         nickname = response.xpath(
             "//div[@class='fighterUpcomingHeader']/h4[@class='preTitle nickname']/text()[normalize-space()]"
-        ).re_first(r"\"(.*)\"")
+        ).get()
         if nickname is not None:
-            ret["nickname"] = nickname
+            ret["nickname"] = normalize_text(nickname)[1:-1]
 
         # The section which stores fighter's profile data (must)
         profile_section = response.xpath("//div[@class='details details_two_columns']")
@@ -213,13 +217,11 @@ class FightersSpider(scrapy.Spider):
         # Date of birth (optional)
         date_of_birth = profile_section.xpath(
             "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()[normalize-space()]"
-        ).re(r"^(\d+)\.(\d+)\.(\d+)$")
-        if len(date_of_birth) == 3:
-            ret["date_of_birth"] = {
-                "y": int(date_of_birth[0]),
-                "m": int(date_of_birth[1]),
-                "d": int(date_of_birth[2]),
-            }
+        ).get()
+        if date_of_birth is not None:
+            date_of_birth = normalize_text(date_of_birth)
+            if date_of_birth not in VALUES_NOT_AVAILABLE:
+                ret["date_of_birth"] = parse_date(date_of_birth)
 
         # Weight class (optional)
         weight_class = profile_section.xpath(
@@ -245,14 +247,14 @@ class FightersSpider(scrapy.Spider):
                     ret["affiliation"] = {
                         "url": url,
                         "id": parse_id_from_url(url),
-                        "name": name,
+                        "name": normalize_text(name),
                     }
 
         # Height (optional)
         # Format: "5\'9\" (175cm)"
         height = profile_section.xpath(
             "./ul/li/strong[text()='Height:']/following-sibling::span[1]/text()[normalize-space()]"
-        ).re(r"^([\d\.]+)\'([\d\.]+)\"")
+        ).re(r"([\d\.]+)\'([\d\.]+)\"")
         if len(height) == 2:
             ret["height"] = to_meter(float(height[0]), float(height[1]))
 
@@ -260,7 +262,7 @@ class FightersSpider(scrapy.Spider):
         # Format: "74.0\" (188cm)"
         reach = profile_section.xpath(
             "./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text()[normalize-space()]"
-        ).re(r"^([\d\.]+)\"")
+        ).re(r"([\d\.]+)\"")
         if len(reach) == 1:
             ret["reach"] = to_meter(0, float(reach[0]))
 
@@ -268,52 +270,64 @@ class FightersSpider(scrapy.Spider):
         place_of_birth = profile_section.xpath(
             "./ul/li/strong[text()='Born:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
-        if place_of_birth is not None and place_of_birth != "N/A":
-            ret["place_of_birth"] = []
-            for p in place_of_birth.split(","):
-                ret["place_of_birth"].append(p.strip())
+        if place_of_birth is not None:
+            place_of_birth = normalize_text(place_of_birth)
+            if place_of_birth not in VALUES_NOT_AVAILABLE:
+                ret["place_of_birth"] = []
+                for p in place_of_birth.split(","):
+                    ret["place_of_birth"].append(p.strip())
 
         # Fighting out of (optional)
         # TODO: Clarify the difference place_of_birth vs out_of
         out_of = profile_section.xpath(
             "./ul/li/strong[text()='Fighting out of:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
-        if out_of is not None and out_of != "N/A":
-            ret["out_of"] = []
-            for o in out_of.split(","):
-                ret["out_of"].append(o.strip())
+        if out_of is not None:
+            out_of = normalize_text(out_of)
+            if out_of not in VALUES_NOT_AVAILABLE:
+                ret["out_of"] = []
+                for o in out_of.split(","):
+                    ret["out_of"].append(o.strip())
 
         # College (optional)
         college = profile_section.xpath(
             "./ul/li/strong[text()='College:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
-        if college is not None and college != "N/A":
-            ret["college"] = college
+        if college is not None:
+            college = normalize_text(college)
+            if college not in VALUES_NOT_AVAILABLE:
+                ret["college"] = college
 
         # Foundation styles (optional)
         styles = profile_section.xpath(
             "./ul/li/strong[text()='Foundation Style:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
-        if styles is not None and styles != "N/A":
-            ret["foundation_styles"] = []
-            for s in styles.split(","):
-                ret["foundation_styles"].append(s.strip())
+        if styles is not None:
+            styles = normalize_text(styles)
+            if styles not in VALUES_NOT_AVAILABLE:
+                ret["foundation_styles"] = []
+                for s in styles.split(","):
+                    ret["foundation_styles"].append(s.strip())
 
         # Head Coach (optional)
         head_coach = profile_section.xpath(
             "./ul/li/strong[text()='Head Coach:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
-        if head_coach is not None and normalize_text(head_coach) != "n/a":
-            ret["head_coach"] = head_coach
+        if head_coach is not None:
+            head_coach = normalize_text(head_coach)
+            if head_coach not in VALUES_NOT_AVAILABLE:
+                ret["head_coach"] = head_coach
 
         # Other Coaches (optional)
         other_coaches = profile_section.xpath(
             "./ul/li/strong[text()='Other Coaches:']/following-sibling::span[1]/text()[normalize-space()]"
         ).get()
-        if other_coaches is not None and normalize_text(other_coaches) != "n/a":
-            ret["other_coaches"] = []
-            for c in other_coaches.split(","):
-                ret["other_coaches"].append(c.strip())
+        if other_coaches is not None:
+            other_coaches = normalize_text(other_coaches)
+            if other_coaches not in VALUES_NOT_AVAILABLE:
+                ret["other_coaches"] = []
+                for c in other_coaches.split(","):
+                    ret["other_coaches"].append(c.strip())
 
         ###########################################################
         #
@@ -367,17 +381,17 @@ class FightersSpider(scrapy.Spider):
                 item["status"] = normed_status
 
                 # Date of the fight (must)
-                txt = pro_record_section.xpath(
+                date = pro_record_section.xpath(
                     "./div[@class='result']/div[@class='date']/text()[normalize-space()]"
                 ).get()
-                if txt is None:
+                if date is None:
                     self.logger.error(
                         "Unexpected page structure: could not identify the date of the bout"
                     )
                     continue
-                date_normed = parse_date(txt)
+                date_normed = parse_date(date)
                 if date_normed is None:
-                    self.logger.error(f"Unexpected format of date: {txt}")
+                    self.logger.error(f"Unexpected format of date: {date}")
                     continue
                 item["date"] = date_normed
 
@@ -649,10 +663,11 @@ class FightersSpider(scrapy.Spider):
 
 
 def normalize_text(s: str, lower: bool = True) -> str:
-    temp = " ".join(s.split())
+    s = " ".join(s.split())
+    s = s.replace("\n", "").replace("\t", "")
     if lower:
-        temp = temp.lower()
-    return temp
+        s = s.lower()
+    return s
 
 
 def normalize_status(status: str) -> Union[str, None]:
@@ -727,14 +742,22 @@ def normalize_weight_class(weight_class: str) -> Union[str, None]:
         return WEIGHT_CLASS_FEATHER
     if normed == "lightweight":
         return WEIGHT_CLASS_LIGHT
+    if normed == "super lightweight":
+        return WEIGHT_CLASS_SUPER_LIGHT
     if normed == "welterweight":
         return WEIGHT_CLASS_WELTER
+    if normed == "super welterweight":
+        return WEIGHT_CLASS_SUPER_WELTER
     if normed == "middleweight":
         return WEIGHT_CLASS_MIDDLE
+    if normed == "super middleweight":
+        return WEIGHT_CLASS_SUPER_MIDDLE
     if normed == "light heavyweight":
         return WEIGHT_CLASS_LIGHT_HEAVY
     if normed == "heavyweight":
         return WEIGHT_CLASS_HEAVY
+    if normed == "cruiserweight":
+        return WEIGHT_CLASS_CRUISER
     if normed == "super heavyweight":
         return WEIGHT_CLASS_SUPER_HEAVY
     return None
