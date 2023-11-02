@@ -926,19 +926,17 @@ def parse_duration(txt: str) -> Union[List[int], None]:
 
     # 5-5
     # 5-5-5
-    matched = re.match(r"^(\d+)-(\d+)(?:-(\d+))?", normed)
+    # 5 + 5
+    # 5 + 5 + 5
+    matched = re.match(r"^(\d+)(?:\-| \+ )(\d+)(?:(?:\-| \+ )(\d+))?", normed)
     if matched is not None:
         if matched.group(3) is None:
             return [int(matched.group(1)), int(matched.group(2))]
         return [int(matched.group(1)), int(matched.group(2)), int(matched.group(3))]
 
-    # 5 + 5
-    # 5 + 5 + 5
-    matched = re.match(r"^(\d+) \+ (\d+)(?: \+ (\d+))?", normed)
-    if matched:
-        if matched.group(3) is None:
-            return [int(matched.group(1)), int(matched.group(2))]
-        return [int(matched.group(1)), int(matched.group(2)), int(matched.group(3))]
+    # 1 Round, No Limit
+    if normed == "1 round, no limit":
+        return [-1]
     return None
 
 
