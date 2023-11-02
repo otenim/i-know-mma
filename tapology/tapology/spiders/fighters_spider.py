@@ -176,6 +176,9 @@ class FightersSpider(scrapy.Spider):
         # NOTE: response.url is never None
         ret["url"] = response.url
 
+        # Fighter ID (must)
+        ret["id"] = parse_id_from_url(response.url)
+
         # Fighter name (must)
         name = response.xpath(
             "//div[@class='fighterUpcomingHeader']/h1[not(@*)]/text()[normalize-space()]"
@@ -236,10 +239,12 @@ class FightersSpider(scrapy.Spider):
         if len(affili_section) == 1:
             url = affili_section.xpath("./@href").get()
             if url is not None:
+                url = response.urljoin(url)
                 name = affili_section.xpath("./text()[normalize-space()]").get()
                 if name is not None:
                     ret["affiliation"] = {
                         "url": url,
+                        "id": parse_id_from_url(url),
                         "name": name,
                     }
 
@@ -388,13 +393,16 @@ class FightersSpider(scrapy.Spider):
                 item["opponent"] = {}
 
                 # Name & link of the opponent fighter (at least name must be provided)
+                # ID is available when a link is given
                 a = opponent_section.xpath("./div[@class='name']/a")
                 has_opponent_url = False if len(a) == 0 else True
                 if has_opponent_url:
                     url = a.xpath("./@href").get()
                     name = a.xpath("./text()[normalize-space()]").get()
                     if url is not None:
+                        url = response.urljoin(url)
                         item["opponent"]["url"] = url
+                        item["opponent"]["id"] = parse_id_from_url(url)
                     if name is not None:
                         item["opponent"]["name"] = name
                 else:
@@ -420,15 +428,23 @@ class FightersSpider(scrapy.Spider):
                     )
                     if len(section) == 1:
                         title = section.xpath("./@title").get()
-                        promo = section.xpath("./@href").re_first(r".*/\d+\-(.+)$")
-                        if title == "Promotion Page" and promo is not None:
-                            item["promotion"] = promo
+                        url = section.xpath("./@href").get()
+                        if title == "Promotion Page" and url is not None:
+                            url = response.urljoin(url)
+                            item["promotion"] = {
+                                "url": url,
+                                "id": parse_id_from_url(url),
+                            }
                     if "promotion" not in item:
-                        promo = pro_record_section.xpath(
+                        url = pro_record_section.xpath(
                             "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/@href"
-                        ).re_first(r".*/\d+\-(.+)$")
-                        if promo is not None:
-                            item["promotion"] = promo
+                        ).get()
+                        if url is not None:
+                            url = response.urljoin(url)
+                            item["promotion"] = {
+                                "url": url,
+                                "id": parse_id_from_url(url),
+                            }
 
                 # Record before the fight (optional)
                 # NOTE: available when the bout is not tagged as "nonMma"
@@ -915,6 +931,10 @@ def parse_title_info(txt: str) -> Union[Dict[str, str], None]:
     if len(l) == 2:
         return {"championship": l[1], "as": l[0]}
     return None
+
+
+def parse_id_from_url(url: str) -> str:
+    return url.split("/")[-1]
 
 
 def to_meter(feet: float, inch: float) -> float:
