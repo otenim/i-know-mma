@@ -489,7 +489,7 @@ class FightersSpider(scrapy.Spider):
                     if txt is not None:
                         fighter_record = parse_record(txt)
                         if fighter_record is not None:
-                            result_item["record_before"] = fighter_record
+                            result_item["record"] = fighter_record
                         else:
                             self.logger.error(
                                 f"Unexpected format of fighter record: {txt}"
@@ -504,9 +504,7 @@ class FightersSpider(scrapy.Spider):
                         if txt is not None:
                             opponent_record = parse_record(txt)
                             if opponent_record is not None:
-                                result_item["opponent"][
-                                    "record_before"
-                                ] = opponent_record
+                                result_item["opponent"]["record"] = opponent_record
                             else:
                                 self.logger.error(
                                     f"Unexpected format of opponent record: {txt}"
