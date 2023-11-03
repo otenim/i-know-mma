@@ -172,11 +172,10 @@ class FightersSpider(scrapy.Spider):
         if next_url is not None:
             yield response.follow(next_url, callback=self.parse_fighter_list)
 
-    def parse_fighter(self, response: TextResponse):
+    def parse_fighter(self, response: TextResponse) -> Union[Dict, None]:
         ret = {}
 
         # Fighter url (must)
-        # NOTE: response.url is never None
         ret["url"] = response.url
 
         # Fighter ID (must)
@@ -198,9 +197,24 @@ class FightersSpider(scrapy.Spider):
         # Scrape fighter's profile
         #
         ###########################################################
+        # Header section (must)
+        header_section = response.xpath("//div[@class='fighterUpcomingHeader']")
+        if len(header_section) == 0:
+            self.logger.error(
+                "Unexpected page structure: could not find the header section"
+            )
+            return
+
+        # Nationality (optional)
+        nationality = header_section.xpath("./h2[@id='flag']/a/@href").re_first(
+            r"country\-(.*)$"
+        )
+        if nationality is not None:
+            ret["nationality"] = normalize_text(nationality)
+
         # Fighter's nickname (optional)
-        nickname = response.xpath(
-            "//div[@class='fighterUpcomingHeader']/h4[@class='preTitle nickname']/text()[normalize-space()]"
+        nickname = header_section.xpath(
+            "./h4[@class='preTitle nickname']/text()[normalize-space()]"
         ).get()
         if nickname is not None:
             ret["nickname"] = normalize_text(nickname)[1:-1]
