@@ -1,0 +1,12 @@
+{
+    "editor.formatOnSave": true,
+    "editor.indentSize": "tabSize",
+    "python.languageServer": "Pylance",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+    },
+    "[json]": {
+        "editor.tabSize": 2,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    }
+}
