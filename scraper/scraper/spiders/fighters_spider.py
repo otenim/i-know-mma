@@ -1,9 +1,8 @@
 import scrapy
 import re
 from scrapy.http import Request, TextResponse
-from scrapy.selector import Selector, SelectorList
 from collections.abc import Generator
-from typing import List, Union, Dict, Optional
+from typing import List, Union, Dict
 
 
 # Weight Limits (MMA)
