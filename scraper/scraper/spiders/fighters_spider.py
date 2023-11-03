@@ -344,27 +344,29 @@ class FightersSpider(scrapy.Spider):
 
         ###########################################################
         #
-        # Scrape pro records
+        # Scrape bout results
         #
         ###########################################################
-        pro_record_sections = response.xpath(
-            "//section[@class='fighterFightResults']/ul[@id='proResults']/li"
-        )
-        if len(pro_record_sections) > 0:
-            ret["pro_records"] = []
-            for pro_record_section in pro_record_sections:
-                # Stores data for a single record
-                item = {}
+        for division in ["pro", "am"]:
+            result_sections = response.xpath(
+                f"//section[@class='fighterFightResults']/ul[@id='{division}Results']/li"
+            )
+            if len(result_sections) == 0:
+                continue
+            ret[f"{division}_results"] = []
+            for result_section in result_sections:
+                # Stores data for a single result
+                result_item = {}
 
-                # NOTE: Skip inegligible records
-                non_mma = pro_record_section.xpath(
+                # NOTE: Skip inegligible bouts
+                non_mma = result_section.xpath(
                     "./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text()[normalize-space()]"
                 ).get()
                 if non_mma is not None and non_mma.startswith("Record Ineligible"):
                     continue
 
                 # Sport of the bout (must)
-                sport = pro_record_section.xpath("./@data-sport").get()
+                sport = result_section.xpath("./@data-sport").get()
                 if sport is None:
                     self.logger.error(
                         "Unexpected page structure: could not identify the sport of the bout"
@@ -376,10 +378,10 @@ class FightersSpider(scrapy.Spider):
                     continue
                 if normed_sport in SPORTS_TO_SKIP:
                     continue
-                item["sport"] = normed_sport
+                result_item["sport"] = normed_sport
 
-                # Status of the record (must)
-                status = pro_record_section.xpath("./@data-status").get()
+                # Status of the bout (must)
+                status = result_section.xpath("./@data-status").get()
                 if status is None:
                     self.logger.error(
                         "Unexpected page structure: could not identify the status of the bout"
@@ -391,10 +393,10 @@ class FightersSpider(scrapy.Spider):
                     continue
                 if normed_status in STATUS_TO_SKIP:
                     continue
-                item["status"] = normed_status
+                result_item["status"] = normed_status
 
-                # Date of the fight (must)
-                date = pro_record_section.xpath(
+                # Date of the bout (must)
+                date = result_section.xpath(
                     "./div[@class='result']/div[@class='date']/text()[normalize-space()]"
                 ).get()
                 if date is None:
@@ -406,10 +408,10 @@ class FightersSpider(scrapy.Spider):
                 if date_normed is None:
                     self.logger.error(f"Unexpected format of date: {date}")
                     continue
-                item["date"] = date_normed
+                result_item["date"] = date_normed
 
                 # Opponent fighter of the bout (must)
-                opponent_section = pro_record_section.xpath(
+                opponent_section = result_section.xpath(
                     "./div[@class='result']/div[@class='opponent']"
                 )
                 if len(opponent_section) == 0:
@@ -417,10 +419,10 @@ class FightersSpider(scrapy.Spider):
                         "Unexpected page structure: could not find any opponent data"
                     )
                     continue
-                item["opponent"] = {}
+                result_item["opponent"] = {}
 
-                # Name & link of the opponent fighter (at least name must be provided)
-                # ID is available when a link is given
+                # Name & link of the opponent fighter
+                # NOTE: at least name must be provided
                 a = opponent_section.xpath("./div[@class='name']/a")
                 has_opponent_url = False if len(a) == 0 else True
                 if has_opponent_url:
@@ -428,10 +430,10 @@ class FightersSpider(scrapy.Spider):
                     name = a.xpath("./text()[normalize-space()]").get()
                     if url is not None:
                         url = response.urljoin(url)
-                        item["opponent"]["url"] = url
-                        item["opponent"]["id"] = parse_id_from_url(url)
+                        result_item["opponent"]["url"] = url
+                        result_item["opponent"]["id"] = parse_id_from_url(url)
                     if name is not None:
-                        item["opponent"]["name"] = normalize_text(name)
+                        result_item["opponent"]["name"] = normalize_text(name)
                 else:
                     name = opponent_section.xpath(
                         "./div[@class='name']/span/text()[normalize-space()]"
@@ -441,16 +443,16 @@ class FightersSpider(scrapy.Spider):
                             "Unexpected page structure: could not find opponent's name"
                         )
                         continue
-                    item["opponent"]["name"] = normalize_text(name)
+                    result_item["opponent"]["name"] = normalize_text(name)
 
                 # Promotion of the fight (optional)
-                # NOTE: available when the status is not "cancelled" and "unknown"
-                # Handle only mma promotions
+                # NOTE: available then the bout is not tagged as "nonMma"
+                # and its status is not "cancelled" or "unknown"
                 if non_mma is None and normed_status not in [
                     STATUS_CANCELLED,
                     STATUS_UNKNOWN,
                 ]:
-                    section = pro_record_section.xpath(
+                    section = result_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='notes']/a"
                     )
                     if len(section) == 1:
@@ -458,24 +460,24 @@ class FightersSpider(scrapy.Spider):
                         url = section.xpath("./@href").get()
                         if title == "Promotion Page" and url is not None:
                             url = response.urljoin(url)
-                            item["promotion"] = {
+                            result_item["promotion"] = {
                                 "url": url,
                                 "id": parse_id_from_url(url),
                             }
-                    if "promotion" not in item:
-                        url = pro_record_section.xpath(
+                    if "promotion" not in result_item:
+                        url = result_section.xpath(
                             "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/@href"
                         ).get()
                         if url is not None:
                             url = response.urljoin(url)
-                            item["promotion"] = {
+                            result_item["promotion"] = {
                                 "url": url,
                                 "id": parse_id_from_url(url),
                             }
 
                 # Record before the fight (optional)
                 # NOTE: available when the bout is not tagged as "nonMma"
-                # and its status is not "cancelled" and "unknown"
+                # and its status is not "cancelled" or "unknown"
                 if non_mma is None and normed_status not in [
                     STATUS_CANCELLED,
                     STATUS_UNKNOWN,
@@ -487,14 +489,14 @@ class FightersSpider(scrapy.Spider):
                     if txt is not None:
                         fighter_record = parse_record(txt)
                         if fighter_record is not None:
-                            item["record_before"] = fighter_record
+                            result_item["record_before"] = fighter_record
                         else:
                             self.logger.error(
                                 f"Unexpected format of fighter record: {txt}"
                             )
 
                     # NOTE: Opponent record is available
-                    # when the opponent name has a link
+                    # when the opponent has a link to his page
                     if has_opponent_url:
                         txt = section.xpath(
                             "./span[@title='Opponent Record Before Fight']/text()[normalize-space()]"
@@ -502,14 +504,16 @@ class FightersSpider(scrapy.Spider):
                         if txt is not None:
                             opponent_record = parse_record(txt)
                             if opponent_record is not None:
-                                item["opponent"]["record_before"] = opponent_record
+                                result_item["opponent"][
+                                    "record_before"
+                                ] = opponent_record
                             else:
                                 self.logger.error(
                                     f"Unexpected format of opponent record: {txt}"
                                 )
 
                 # Details of the bout (optional)
-                # NOTE: For now, scrape only mma bouts (not tagged as "nonMma")
+                # NOTE: Handle only mma bouts (not tagged as "nonMma")
                 # with status win, loss, or draw
                 if non_mma is None and normed_status in [
                     STATUS_WIN,
@@ -517,7 +521,7 @@ class FightersSpider(scrapy.Spider):
                     STATUS_DRAW,
                 ]:
                     # Parse summary lead of the record
-                    lead_section = pro_record_section.xpath(
+                    lead_section = result_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='lead']"
                     )
                     if len(lead_section) == 0:
@@ -555,11 +559,11 @@ class FightersSpider(scrapy.Spider):
                                     if n == 2:
                                         # (win|loss|draw), (decision|finish)
                                         if l[1] == "decision":
-                                            item["ended_by"] = {
+                                            result_item["ended_by"] = {
                                                 "type": "decision",
                                             }
                                         else:
-                                            item["ended_by"] = {
+                                            result_item["ended_by"] = {
                                                 "type": infer(l[1]),
                                                 "detail": l[1],
                                             }
@@ -568,12 +572,12 @@ class FightersSpider(scrapy.Spider):
                                         # (win|loss|draw), decision, (majority|unanimous|split)
                                         t = infer(l[1])
                                         if t == "decision":
-                                            item["ended_by"] = {
+                                            result_item["ended_by"] = {
                                                 "type": t,
                                                 "detail": l[2],
                                             }
                                         else:
-                                            item["ended_by"] = {
+                                            result_item["ended_by"] = {
                                                 "type": t,
                                                 "detail": l[1],
                                             }
@@ -583,98 +587,104 @@ class FightersSpider(scrapy.Spider):
                                                     f"Unexpected format of round: {l[2]}"
                                                 )
                                             else:
-                                                item["ended_at"] = {"round": r}
+                                                result_item["ended_at"] = {"round": r}
                                     elif n == 4:
                                         # (win|loss), finish, time, round
-                                        item["ended_by"] = {
+                                        result_item["ended_by"] = {
                                             "type": infer(l[1]),
                                             "detail": l[1],
                                         }
                                         r, t = parse_round(l[3]), parse_time(l[2])
                                         if r is not None or t is not None:
-                                            item["ended_at"] = {}
+                                            result_item["ended_at"] = {}
                                             if r is None:
                                                 self.logger.error(
                                                     f"Unexpected format of round: {l[3]}"
                                                 )
                                             else:
-                                                item["ended_at"]["round"] = r
+                                                result_item["ended_at"]["round"] = r
                                             if t is None:
                                                 self.logger.error(
                                                     f"Unexpected format of time: {l[2]}"
                                                 )
                                             else:
-                                                item["ended_at"]["time"] = t
+                                                result_item["ended_at"]["time"] = t
 
-                    # Parse more data of the record
-                    label_sections = pro_record_section.xpath(
+                    # Parse more data about the bout
+                    label_sections = result_section.xpath(
                         "./div[@class='details tall']/div[@class='div']/span[@class='label']"
                     )
                     for label_section in label_sections:
                         label = label_section.xpath("./text()[normalize-space()]").get()
                         if label is None:
                             continue
-                        if label == "Billing:":
+                        label = normalize_text(label)
+                        if label == "billing:":
                             # Billing of the bout
+                            # e.g "main event", "co-main event", "prelim", etc.
                             billing = label_section.xpath(
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if billing is not None:
-                                item["billing"] = normalize_text(billing)
-                        elif label == "Duration:":
+                                result_item["billing"] = normalize_text(billing)
+                        elif label == "duration:":
                             # Duration of the bout
+                            # The number of rounds, the duration per round
                             txt = label_section.xpath(
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if txt is not None:
                                 duration = parse_duration(txt)
                                 if duration is not None:
-                                    item["duration"] = duration
+                                    result_item["duration"] = duration
                                 else:
                                     self.logger.error(
                                         f"Unexpected format of duration: {txt}"
                                     )
-                        elif label == "Referee:":
+                        elif label == "referee:":
                             # Name of the referee
                             referee = label_section.xpath(
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if referee is not None:
-                                item["referee"] = normalize_text(referee)
-                        elif label == "Weight:":
-                            # Contracted limit & weigh-in weight
+                                result_item["referee"] = normalize_text(referee)
+                        elif label == "weight:":
+                            # Contracted weight limit & measured weight at weigh-in
                             txt = label_section.xpath(
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if txt is not None:
                                 weight = parse_weight(txt)
                                 if weight is not None:
-                                    item["weight"] = weight
+                                    result_item["weight"] = weight
                                 else:
                                     self.logger.error(
                                         f"Unexpected format of weight: {txt}"
                                     )
-                        elif label == "Odds:":
-                            # Odds of the fighter for the bout
+                        elif label == "odds:":
+                            # Odds of the fighter at the bout
+                            # NOTE: american odds style; e.g +100, -500
                             odds = label_section.xpath(
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).re_first(r"([\+\-][\d\.]+)")
                             if odds is not None:
-                                item["odds"] = float(odds)
-                        elif label == "Title Bout:":
+                                result_item["odds"] = float(odds)
+                        elif label == "title bout:":
                             # Title info of the bout
+                            # NOTE: available when this is a title match
+                            # or a part of a tornament
                             txt = label_section.xpath(
                                 "./following-sibling::span[1]/text()[normalize-space()]"
                             ).get()
                             if txt is not None:
                                 info = parse_title_info(txt)
                                 if info is not None:
-                                    item["title_info"] = info
+                                    result_item["title_info"] = info
                                 else:
                                     self.logger.error(
                                         f"Unexpected format of title info: {txt}"
                                     )
-                ret["pro_records"].append(item)
+                ret[f"{division}_results"].append(result_item)
         return ret
 
 
