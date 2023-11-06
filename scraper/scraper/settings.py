@@ -21,9 +21,6 @@ CONCURRENT_REQUESTS = 1
 # See also autothrottle settings and docs
 DOWNLOAD_DELAY = 3
 
-# Compression
-COMPRESSION_ENABLED = True
-
 # Enable and configure HTTP caching (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
 HTTPCACHE_ENABLED = True
