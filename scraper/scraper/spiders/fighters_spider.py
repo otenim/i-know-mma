@@ -347,16 +347,16 @@ class FightersSpider(scrapy.Spider):
         # Scrape bout results
         #
         ###########################################################
+        ret["results"] = []
         for division in ["pro", "am"]:
             result_sections = response.xpath(
                 f"//section[@class='fighterFightResults']/ul[@id='{division}Results']/li"
             )
             if len(result_sections) == 0:
                 continue
-            ret[f"{division}_results"] = []
             for result_section in result_sections:
                 # Stores data for a single result
-                result_item = {}
+                result_item = {"division": division}
 
                 # NOTE: Skip inegligible bouts
                 non_mma = result_section.xpath(
@@ -682,7 +682,7 @@ class FightersSpider(scrapy.Spider):
                                     self.logger.error(
                                         f"Unexpected format of title info: {txt}"
                                     )
-                ret[f"{division}_results"].append(result_item)
+                ret["results"].append(result_item)
         return ret
 
 
