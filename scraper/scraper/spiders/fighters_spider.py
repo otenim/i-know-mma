@@ -914,11 +914,7 @@ def parse_date(txt: str) -> Union[Dict[str, int], None]:
     normed = normalize_text(txt)
     matched = re.match(r"^(\d+)\.(\d+)\.(\d+)$", normed)
     if matched is not None:
-        return {
-            "y": int(matched.group(1)),
-            "m": int(matched.group(2)),
-            "d": int(matched.group(3)),
-        }
+        return f"{matched.group(1):04}-{matched.group(2):02}-{matched.group(3):02}"
     return None
 
 
