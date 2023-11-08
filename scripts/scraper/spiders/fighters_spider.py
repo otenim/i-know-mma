@@ -822,7 +822,7 @@ def parse_duration(txt: str) -> Union[List[int], None]:
 
     # 5 x 5 minute rounds
     # 5 x 5 min
-    matched = re.match(r"^(\d+) x (\d+) (?:minute rounds|min)$", normed)
+    matched = re.match(r"^(\d+) x (\d+)", normed)
     if matched is not None:
         return [int(matched.group(2)) for _ in range(int(matched.group(1)))]
 
@@ -842,7 +842,8 @@ def parse_duration(txt: str) -> Union[List[int], None]:
     # 5-5 plus overtime
     # 5-5-5 plus overtime
     # 5-5-5-5 plus overtime
-    matched = re.match(r"^(\d+(?:\-\d+)+)( plus overtime)?$", normed)
+    # 5-5 two rounds
+    matched = re.match(r"^(\d+(?:\-\d+)+)( plus overtime)?", normed)
     if matched is not None:
         ret = list(map(lambda x: int(x), matched.group(1).split("-")))
         if matched.group(2) is not None:
@@ -852,7 +853,7 @@ def parse_duration(txt: str) -> Union[List[int], None]:
 
     # 5 + 5 two rounds
     # 5 + 5 + 5 three rounds
-    matched = re.match(r"^(\d+(?: \+ \d+)+) .* rounds$", normed)
+    matched = re.match(r"^(\d+(?: \+ \d+)+)", normed)
     if matched is not None:
         return list(map(lambda x: int(x.strip()), matched.group(1).split("+")))
 
