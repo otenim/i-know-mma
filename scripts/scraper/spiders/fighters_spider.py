@@ -34,6 +34,7 @@ class FightersSpider(scrapy.Spider):
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
         for fighter in fighters:
             career_record = fighter.xpath("./td[7]/text()[normalize-space()]").get()
+            name = fighter.xpath("./td[1]/a/text()[normalize-space()]").get()
             if career_record is None:
                 self.logger.error(
                     "Unexpected page structure: could not find mma career record column on the fighters' list"
@@ -46,11 +47,18 @@ class FightersSpider(scrapy.Spider):
                 self.logger.error(f"Unexpected mma record format: {career_record}")
                 continue
             if self.ignore_am_mma_fighters and matched.group(1) == "Am":
+                self.logger.info(f"Ignored an amateur mma fighter {name}")
                 continue
             total = sum(
                 [int(matched.group(2)), int(matched.group(3)), int(matched.group(4))]
             )
+            if total == 0:
+                self.logger.info(f"Ignored a non-mma fighter {name}")
+                continue
             if total < self.min_mma_bouts:
+                self.logger.info(
+                    f"Ignored a fighter {name} with mma bout count = {total} < {self.min_mma_bouts}"
+                )
                 continue
             url = fighter.xpath("./td[1]/a/@href").get()
             if url is not None:
@@ -218,7 +226,7 @@ class FightersSpider(scrapy.Spider):
 
         # Parse bout results
         ret["results"] = []
-        for division in ["pro", "am"]:
+        for division in [DIVISION_PRO, DIVISION_AM]:
             result_sections = response.xpath(
                 f"//section[@class='fighterFightResults']/ul[@id='{division}Results']/li"
             )

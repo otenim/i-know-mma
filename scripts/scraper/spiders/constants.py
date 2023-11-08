@@ -111,5 +111,10 @@ VALUES_STATUS_NO_CONTEST = ["no contest"]
 VALUES_STATUS_UNKNOWN = ["unknown"]
 
 
+# Division of the bout
+DIVISION_PRO = "pro"
+DIVISION_AM = "am"
+
+
 # Expected values for "not available"
 VALUES_NOT_AVAILABLE = ["n/a"]
