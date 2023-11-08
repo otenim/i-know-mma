@@ -14,14 +14,14 @@ class FightersSpider(scrapy.Spider):
         self,
         min_mma_bouts: int = 1,
         ignore_am_mma_fighters: bool = False,
-        ignore_non_mma_fighters: bool = True,
         *args,
         **kwargs,
     ):
         super(FightersSpider, self).__init__(*args, **kwargs)
+        if min_mma_bouts < 0:
+            raise ValueError(f"min_mma_bouts expects >= 0 but {min_mma_bouts}")
         self.min_mma_bouts = min_mma_bouts
         self.ignore_am_mma_fighters = ignore_am_mma_fighters
-        self.ignore_non_mma_fighters = ignore_non_mma_fighters
 
     def parse(self, response: TextResponse):
         urls = response.xpath(
@@ -52,9 +52,6 @@ class FightersSpider(scrapy.Spider):
             total = sum(
                 [int(matched.group(2)), int(matched.group(3)), int(matched.group(4))]
             )
-            if total == 0:
-                self.logger.info(f"Ignored a non-mma fighter {name}")
-                continue
             if total < self.min_mma_bouts:
                 self.logger.info(
                     f"Ignored a fighter {name} with mma bout count = {total} < {self.min_mma_bouts}"
