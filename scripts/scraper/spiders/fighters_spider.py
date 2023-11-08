@@ -12,14 +12,14 @@ class FightersSpider(scrapy.Spider):
 
     def __init__(
         self,
-        min_pro_mma_bouts: int = 1,
+        min_mma_bouts: int = 1,
         ignore_am_mma_fighters: bool = False,
         ignore_non_mma_fighters: bool = True,
         *args,
         **kwargs,
     ):
         super(FightersSpider, self).__init__(*args, **kwargs)
-        self.min_pro_mma_bouts = min_pro_mma_bouts
+        self.min_mma_bouts = min_mma_bouts
         self.ignore_am_mma_fighters = ignore_am_mma_fighters
         self.ignore_non_mma_fighters = ignore_non_mma_fighters
 
@@ -50,7 +50,7 @@ class FightersSpider(scrapy.Spider):
             total = sum(
                 [int(matched.group(2)), int(matched.group(3)), int(matched.group(4))]
             )
-            if total < self.min_pro_mma_bouts:
+            if total < self.min_mma_bouts:
                 continue
             url = fighter.xpath("./td[1]/a/@href").get()
             if url is not None:
