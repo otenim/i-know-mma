@@ -33,29 +33,25 @@ class FightersSpider(scrapy.Spider):
     def parse_fighter_list(self, response: TextResponse):
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
         for fighter in fighters:
-            career_record = fighter.xpath("./td[7]/text()[normalize-space()]").get()
-            name = fighter.xpath("./td[1]/a/text()[normalize-space()]").get()
+            career_record = fighter.xpath("./td[7]/text()").get()
             if career_record is None:
                 self.logger.error(
                     "Unexpected page structure: could not find mma career record column on the fighters' list"
                 )
                 continue
+            career_record = normalize_text(career_record)
             matched = re.match(
-                r"^(?:(Am) )?(\d+)-(\d+)-(\d+)(?:, \d+ NC)?$", career_record
+                r"^(?:(am) )?(\d+)-(\d+)-(\d+)(?:, \d+ nc)?$", career_record
             )
             if matched is None:
                 self.logger.error(f"Unexpected mma record format: {career_record}")
                 continue
-            if self.ignore_am_mma_fighters and matched.group(1) == "Am":
-                self.logger.info(f"Ignored an amateur mma fighter {name}")
+            if self.ignore_am_mma_fighters and matched.group(1) == "am":
                 continue
             total = sum(
                 [int(matched.group(2)), int(matched.group(3)), int(matched.group(4))]
             )
             if total < self.min_mma_bouts:
-                self.logger.info(
-                    f"Ignored a fighter {name} with mma bout count = {total} < {self.min_mma_bouts}"
-                )
                 continue
             url = fighter.xpath("./td[1]/a/@href").get()
             if url is not None:
@@ -79,7 +75,7 @@ class FightersSpider(scrapy.Spider):
 
         # Fighter name (must)
         name = response.xpath(
-            "//div[@class='fighterUpcomingHeader']/h1[not(@*)]/text()[normalize-space()]"
+            "//div[@class='fighterUpcomingHeader']/h1[not(@*)]/text()"
         ).get()
         if name is None:
             self.logger.error(
@@ -104,9 +100,7 @@ class FightersSpider(scrapy.Spider):
             ret["nationality"] = normalize_text(nationality)
 
         # Nickname (optional)
-        nickname = header_section.xpath(
-            "./h4[@class='preTitle nickname']/text()[normalize-space()]"
-        ).get()
+        nickname = header_section.xpath("./h4[@class='preTitle nickname']/text()").get()
         if nickname is not None:
             ret["nickname"] = normalize_text(nickname)[1:-1]
 
@@ -120,7 +114,7 @@ class FightersSpider(scrapy.Spider):
 
         # Date of birth (optional)
         date_of_birth = profile_section.xpath(
-            "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()[normalize-space()]"
+            "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()"
         ).get()
         if date_of_birth is not None:
             date_of_birth = normalize_text(date_of_birth)
@@ -129,7 +123,7 @@ class FightersSpider(scrapy.Spider):
 
         # Weight class (optional)
         weight_class = profile_section.xpath(
-            "./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text()[normalize-space()]"
+            "./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text()"
         ).get()
         if weight_class:
             normed = normalize_weight_class(weight_class)
@@ -144,57 +138,33 @@ class FightersSpider(scrapy.Spider):
         )
         if len(affili_section) == 1:
             url = affili_section.xpath("./@href").get()
-            if url is not None:
-                url = response.urljoin(url)
-                name = affili_section.xpath("./text()[normalize-space()]").get()
-                if name is not None:
-                    ret["affiliation"] = {
-                        "url": url,
-                        "id": parse_id_from_url(url),
-                        "name": normalize_text(name),
-                    }
+            name = affili_section.xpath("./text()").get()
+            if url is not None and name is not None:
+                ret["affiliation"] = {
+                    "url": response.urljoin(url),
+                    "id": parse_id_from_url(url),
+                    "name": normalize_text(name),
+                }
 
         # Height (optional)
-        # NOTE: e.g. "5\'9\" (175cm)"
+        # e.g. "5\'9\" (175cm)"
         height = profile_section.xpath(
-            "./ul/li/strong[text()='Height:']/following-sibling::span[1]/text()[normalize-space()]"
+            "./ul/li/strong[text()='Height:']/following-sibling::span[1]/text()"
         ).re(r"([\d\.]+)\'([\d\.]+)\"")
         if len(height) == 2:
             ret["height"] = to_meter(float(height[0]), float(height[1]))
 
         # Reach (optional)
-        # NOTE: e.g. "74.0\" (188cm)"
+        # e.g. "74.0\" (188cm)"
         reach = profile_section.xpath(
-            "./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text()[normalize-space()]"
+            "./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text()"
         ).re(r"([\d\.]+)\"")
         if len(reach) == 1:
             ret["reach"] = to_meter(0, float(reach[0]))
 
-        # Place of birth (optional)
-        place_of_birth = profile_section.xpath(
-            "./ul/li/strong[text()='Born:']/following-sibling::span[1]/text()[normalize-space()]"
-        ).get()
-        if place_of_birth is not None:
-            place_of_birth = normalize_text(place_of_birth)
-            if place_of_birth not in VALUES_NOT_AVAILABLE:
-                ret["place_of_birth"] = []
-                for p in place_of_birth.split(","):
-                    ret["place_of_birth"].append(p.strip())
-
-        # Fighting out of (optional)
-        out_of = profile_section.xpath(
-            "./ul/li/strong[text()='Fighting out of:']/following-sibling::span[1]/text()[normalize-space()]"
-        ).get()
-        if out_of is not None:
-            out_of = normalize_text(out_of)
-            if out_of not in VALUES_NOT_AVAILABLE:
-                ret["out_of"] = []
-                for o in out_of.split(","):
-                    ret["out_of"].append(o.strip())
-
         # College (optional)
         college = profile_section.xpath(
-            "./ul/li/strong[text()='College:']/following-sibling::span[1]/text()[normalize-space()]"
+            "./ul/li/strong[text()='College:']/following-sibling::span[1]/text()"
         ).get()
         if college is not None:
             college = normalize_text(college)
@@ -203,7 +173,7 @@ class FightersSpider(scrapy.Spider):
 
         # Foundation styles (optional)
         styles = profile_section.xpath(
-            "./ul/li/strong[text()='Foundation Style:']/following-sibling::span[1]/text()[normalize-space()]"
+            "./ul/li/strong[text()='Foundation Style:']/following-sibling::span[1]/text()"
         ).get()
         if styles is not None:
             styles = normalize_text(styles)
@@ -214,7 +184,7 @@ class FightersSpider(scrapy.Spider):
 
         # Head Coach (optional)
         head_coach = profile_section.xpath(
-            "./ul/li/strong[text()='Head Coach:']/following-sibling::span[1]/text()[normalize-space()]"
+            "./ul/li/strong[text()='Head Coach:']/following-sibling::span[1]/text()"
         ).get()
         if head_coach is not None:
             head_coach = normalize_text(head_coach)
@@ -233,16 +203,13 @@ class FightersSpider(scrapy.Spider):
                 # Stores data of a bout
                 item = {"division": division}
 
-                # Check if this is a non mma bout
+                # Ignore inegligible bouts
                 txt = result_section.xpath(
-                    "./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text()[normalize-space()]"
+                    "./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text()"
                 ).get()
-                is_non_mma_bout = False
                 if txt is not None:
-                    is_non_mma_bout = True
                     txt = normalize_text(txt)
                     if txt.startswith("record ineligible"):
-                        # NOTE: Ignore inegligible bouts
                         continue
 
                 # Sport of the bout (must)
@@ -256,10 +223,6 @@ class FightersSpider(scrapy.Spider):
                 if normed_sport is None:
                     self.logger.error(f"Unexpected sport value: {sport}")
                     continue
-                if normed_sport == SPORT_CUSTOM:
-                    # NOTE: Ignore records with custom rule
-                    continue
-                item["sport"] = normed_sport
 
                 # Status of the bout (must)
                 status = result_section.xpath("./@data-status").get()
@@ -272,19 +235,19 @@ class FightersSpider(scrapy.Spider):
                 if normed_status is None:
                     self.logger.error(f"Unexpected status value: {status}")
                     continue
+                # Ignore bouts with status = cancelled, upcoming, unknown, no-contest
                 if normed_status in [
                     STATUS_CANCELLED,
                     STATUS_UPCOMING,
                     STATUS_UNKNOWN,
                     STATUS_NO_CONTEST,
                 ]:
-                    # NOTE: Ignore records with status = cancelled, upcoming, unknown, no-contest bouts
                     continue
                 item["status"] = normed_status
 
                 # Date of the bout (must)
                 date = result_section.xpath(
-                    "./div[@class='result']/div[@class='date']/text()[normalize-space()]"
+                    "./div[@class='result']/div[@class='date']/text()"
                 ).get()
                 if date is None:
                     self.logger.error(
@@ -297,115 +260,103 @@ class FightersSpider(scrapy.Spider):
                     continue
                 item["date"] = date_normed
 
-                # Opponent fighter of the bout (must)
-                opponent_section = result_section.xpath(
-                    "./div[@class='result']/div[@class='opponent']"
-                )
-                if len(opponent_section) == 0:
-                    self.logger.error(
-                        "Unexpected page structure: could not find any opponent data"
+                # Parse opponent data if this is an mma bout
+                if normed_sport == SPORT_MMA:
+                    # Opponent section (must)
+                    opponent_section = result_section.xpath(
+                        "./div[@class='result']/div[@class='opponent']"
                     )
-                    continue
-                item["opponent"] = {}
+                    if len(opponent_section) == 0:
+                        self.logger.error(
+                            "Unexpected page structure: could not find opponent section"
+                        )
+                        continue
+                    item["opponent"] = {}
 
-                # Name & link of the opponent fighter
-                # NOTE: at least name must be provided
-                a = opponent_section.xpath("./div[@class='name']/a")
-                has_opponent_url = False if len(a) == 0 else True
-                if has_opponent_url:
-                    url = a.xpath("./@href").get()
-                    name = a.xpath("./text()[normalize-space()]").get()
+                    # Check if opponent section has a link
+                    opponent_link_section = opponent_section.xpath(
+                        "./div[@class='name']/a"
+                    )
+                    has_opponent_link = (
+                        True if len(opponent_link_section) == 1 else False
+                    )
+
+                    # Name & url of the opponent (optional)
+                    name = url = None
+                    if has_opponent_link:
+                        url = opponent_link_section.xpath("./@href").get()
+                        name = opponent_link_section.xpath("./text()").get()
+                    else:
+                        name = opponent_section.xpath(
+                            "./div[@class='name']/span/text()"
+                        ).get()
+                    name = normalize_text(name)
+                    item["opponent"]["name"] = name
                     if url is not None:
                         url = response.urljoin(url)
                         item["opponent"]["url"] = url
                         item["opponent"]["id"] = parse_id_from_url(url)
-                    if name is not None:
-                        item["opponent"]["name"] = normalize_text(name)
-                else:
-                    name = opponent_section.xpath(
-                        "./div[@class='name']/span/text()[normalize-space()]"
-                    ).get()
-                    if name is None:
-                        self.logger.error(
-                            "Unexpected page structure: could not find opponent's name"
-                        )
-                        continue
-                    item["opponent"]["name"] = normalize_text(name)
 
-                # Promotion of the fight (optional)
-                # NOTE: available then the bout is not tagged as "nonMma"
-                # and its status is not "cancelled" or "unknown"
-                if not is_non_mma_bout and normed_status not in [
-                    STATUS_CANCELLED,
-                    STATUS_UNKNOWN,
-                ]:
-                    section = result_section.xpath(
+                    # Career record of the opponent (optional)
+                    if has_opponent_link:
+                        opponent_record = opponent_section.xpath(
+                            "./div[@class='record']/span[@title='Opponent Record Before Fight']/text()"
+                        ).get()
+                        if opponent_record is not None:
+                            parsed = parse_record(opponent_record)
+                            if parsed is None:
+                                self.logger.error(
+                                    f"Unexpected format of fighter record: {opponent_record}"
+                                )
+                            else:
+                                item["opponent"]["record"] = parsed
+
+                    # Career record of the fighter (optional)
+                    fighter_record = opponent_section.xpath(
+                        "./div[@class='record']/span[@title='Fighter Record Before Fight']/text()"
+                    ).get()
+                    if fighter_record is not None:
+                        parsed = parse_record(fighter_record)
+                        if parsed is None:
+                            self.logger.error(
+                                f"Unexpected format of fighter record: {fighter_record}"
+                            )
+                        else:
+                            item["record"] = parsed
+
+                # Promotion of the bout (optional)
+                promo_url = result_section.xpath(
+                    "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/@href"
+                ).get()
+                if promo_url is not None:
+                    promo_url = response.urljoin(promo_url)
+                    item["promotion"] = {
+                        "url": promo_url,
+                        "id": parse_id_from_url(promo_url),
+                    }
+                if "promotion" not in item:
+                    promo_link_section = result_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='notes']/a"
                     )
-                    if len(section) == 1:
-                        title = section.xpath("./@title").get()
-                        url = section.xpath("./@href").get()
-                        if title == "Promotion Page" and url is not None:
-                            url = response.urljoin(url)
-                            item["promotion"] = {
-                                "url": url,
-                                "id": parse_id_from_url(url),
-                            }
-                    if "promotion" not in item:
-                        url = result_section.xpath(
-                            "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/@href"
-                        ).get()
-                        if url is not None:
-                            url = response.urljoin(url)
-                            item["promotion"] = {
-                                "url": url,
-                                "id": parse_id_from_url(url),
-                            }
+                    if len(promo_link_section) == 1:
+                        title = promo_link_section.xpath("./@title").get()
+                        promo_url = promo_link_section.xpath("./@href").get()
+                        if title is not None:
+                            title = normalize_text(title)
+                            if title == "promotion page" and promo_url is not None:
+                                promo_url = response.urljoin(promo_url)
+                                item["promotion"] = {
+                                    "url": promo_url,
+                                    "id": parse_id_from_url(promo_url),
+                                }
 
-                # Career record before the bout (optional)
-                # NOTE: available when the bout is not tagged as "nonMma"
-                # and its status is not "cancelled" or "unknown"
-                if not is_non_mma_bout is None and normed_status not in [
-                    STATUS_CANCELLED,
-                    STATUS_UNKNOWN,
-                ]:
-                    section = opponent_section.xpath("./div[@class='record']")
-                    txt = section.xpath(
-                        "./span[@title='Fighter Record Before Fight']/text()[normalize-space()]"
-                    ).get()
-                    if txt is not None:
-                        fighter_record = parse_record(txt)
-                        if fighter_record is not None:
-                            item["record"] = fighter_record
-                        else:
-                            self.logger.error(
-                                f"Unexpected format of fighter record: {txt}"
-                            )
-
-                    # NOTE: Opponent record is available
-                    # when the opponent has a link to his page
-                    if has_opponent_url:
-                        txt = section.xpath(
-                            "./span[@title='Opponent Record Before Fight']/text()[normalize-space()]"
-                        ).get()
-                        if txt is not None:
-                            opponent_record = parse_record(txt)
-                            if opponent_record is not None:
-                                item["opponent"]["record"] = opponent_record
-                            else:
-                                self.logger.error(
-                                    f"Unexpected format of opponent record: {txt}"
-                                )
-
-                # Details of the bout (optional)
-                # NOTE: Handle only mma bouts (not tagged as "nonMma")
-                # with status win, loss, or draw
-                if is_non_mma_bout is None and normed_status in [
+                # Details of the bout result (optional)
+                if normed_status in [
                     STATUS_WIN,
                     STATUS_LOSS,
                     STATUS_DRAW,
                 ]:
-                    # Parse summary lead of the record
+                    # Parse summary lead of the result
                     lead_section = result_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='lead']"
                     )
@@ -494,12 +445,12 @@ class FightersSpider(scrapy.Spider):
                                             else:
                                                 item["ended_at"]["time"] = t
 
-                    # Parse more data about the bout
+                    # More info about the bout (optional)
                     label_sections = result_section.xpath(
                         "./div[@class='details tall']/div[@class='div']/span[@class='label']"
                     )
                     for label_section in label_sections:
-                        label = label_section.xpath("./text()[normalize-space()]").get()
+                        label = label_section.xpath("./text()").get()
                         if label is None:
                             continue
                         label = normalize_text(label)
@@ -507,7 +458,7 @@ class FightersSpider(scrapy.Spider):
                             # Billing of the bout
                             # e.g "main event", "co-main event", "prelim", etc.
                             billing = label_section.xpath(
-                                "./following-sibling::span[1]/text()[normalize-space()]"
+                                "./following-sibling::span[1]/text()"
                             ).get()
                             if billing is not None:
                                 item["billing"] = normalize_text(billing)
@@ -515,7 +466,7 @@ class FightersSpider(scrapy.Spider):
                             # Duration of the bout
                             # The number of rounds, the duration per round
                             txt = label_section.xpath(
-                                "./following-sibling::span[1]/text()[normalize-space()]"
+                                "./following-sibling::span[1]/text()"
                             ).get()
                             if txt is not None:
                                 duration = parse_duration(txt)
@@ -528,14 +479,14 @@ class FightersSpider(scrapy.Spider):
                         elif label == "referee:":
                             # Name of the referee
                             referee = label_section.xpath(
-                                "./following-sibling::span[1]/text()[normalize-space()]"
+                                "./following-sibling::span[1]/text()"
                             ).get()
                             if referee is not None:
                                 item["referee"] = normalize_text(referee)
                         elif label == "weight:":
                             # Contracted weight limit & measured weight at weigh-in
                             txt = label_section.xpath(
-                                "./following-sibling::span[1]/text()[normalize-space()]"
+                                "./following-sibling::span[1]/text()"
                             ).get()
                             if txt is not None:
                                 weight = parse_weight(txt)
@@ -546,38 +497,43 @@ class FightersSpider(scrapy.Spider):
                                         f"Unexpected format of weight: {txt}"
                                     )
                         elif label == "odds:":
-                            # Odds of the fighter at the bout
-                            # NOTE: american odds style; e.g +100, -500
-                            odds = label_section.xpath(
-                                "./following-sibling::span[1]/text()[normalize-space()]"
-                            ).re_first(r"([\+\-][\d\.]+)")
-                            if odds is not None:
-                                item["odds"] = float(odds)
-                        elif label == "title bout:":
-                            # Title info of the bout
-                            # NOTE: available when this is a title match
-                            # or a part of a tornament
+                            # Odds of the fighter in the bout
                             txt = label_section.xpath(
-                                "./following-sibling::span[1]/text()[normalize-space()]"
+                                "./following-sibling::span[1]/text()"
                             ).get()
                             if txt is not None:
-                                info = parse_title_info(txt)
-                                if info is not None:
-                                    item["title_info"] = info
+                                odds = parse_odds(txt)
+                                if odds is not None:
+                                    item["odds"] = odds
+                                else:
+                                    self.logger.error(
+                                        f"Unexpected format of odds: {txt}"
+                                    )
+                        elif label == "title bout:":
+                            # Title info
+                            txt = label_section.xpath(
+                                "./following-sibling::span[1]/text()"
+                            ).get()
+                            if txt is not None:
+                                title_info = parse_title_info(txt)
+                                if title_info is not None:
+                                    item["title_info"] = title_info
                                 else:
                                     self.logger.error(
                                         f"Unexpected format of title info: {txt}"
                                     )
                 ret["results"].append(item)
+            if len(ret["results"]) == 0:
+                return
         return ret
 
 
-def normalize_text(s: str, lower: bool = True) -> str:
-    s = " ".join(s.split())
-    s = s.replace("\n", "").replace("\t", "")
+def normalize_text(txt: str, lower: bool = True) -> str:
+    txt = " ".join(txt.split())
+    txt = txt.replace("\n", "").replace("\t", "")
     if lower:
-        s = s.lower()
-    return s
+        txt = txt.lower()
+    return txt
 
 
 def normalize_status(status: str) -> Union[str, None]:
@@ -713,6 +669,35 @@ def to_weight_class(value: float, unit: str = "kg", margin: float = 0.02) -> str
     return WEIGHT_CLASS_SUPER_HEAVY
 
 
+def parse_title_info(txt: str) -> Union[Dict, None]:
+    normed = normalize_text(txt)
+    ret = {}
+
+    split = list(map(lambda x: x.strip(), normed.split("·")))
+    if len(split) == 2:
+        # Champion · UFC Featherweight Championship
+        ret["as"] = normalize_text(split[0])
+        ret["name"] = normalize_text(split[1])
+    elif len(split) == 1:
+        # Tournament Championship
+        ret["name"] = normalize_text(split[0])
+    if "name" in ret:
+        ret["type"] = "tournament" if "tournament" in ret["name"] else "championship"
+        return ret
+    return None
+
+
+def parse_odds(txt: str) -> Union[float, None]:
+    normed = normalize_text(txt)
+
+    # +210 · Moderate Underdog
+    matched = re.match(r"^([\+\-][\d\.]+)", normed)
+    if matched is not None:
+        american = float(matched.group(1))
+        return (american / 100) + 1.0
+    return None
+
+
 def parse_weight(txt: str) -> Union[Dict[str, float], None]:
     normed = normalize_text(txt)
     weight_class = None
@@ -816,18 +801,18 @@ def parse_record(txt: str) -> Union[Dict[str, int], None]:
     return None
 
 
-def parse_time(txt: str) -> Union[Dict[str, int], None]:
+def parse_time(txt: str) -> Union[str, None]:
     normed = normalize_text(txt)
-    matched = re.match(r"^(\d+):(\d+)$", normed)
-    if matched:
-        return {"m": int(matched.group(1)), "s": int(matched.group(2))}
+    matched = re.match(r"^(\d+:\d+)$", normed)
+    if matched is not None:
+        return matched.group(1)
     return None
 
 
 def parse_round(txt: str) -> Union[int, None]:
     normed = normalize_text(txt)
-    matched = re.match(r"^r([1-9])$", normed)
-    if matched:
+    matched = re.match(r"^r(\d+)$", normed)
+    if matched is not None:
         return int(matched.group(1))
     return None
 
@@ -835,40 +820,46 @@ def parse_round(txt: str) -> Union[int, None]:
 def parse_duration(txt: str) -> Union[List[int], None]:
     normed = normalize_text(txt)
 
-    # 5 min
-    # 2 x 5 min
-    matched = re.match(r"^(\d+)(?: x (\d+))? min", normed)
+    # 5 x 5 minute rounds
+    # 5 x 5 min
+    matched = re.match(r"^(\d+) x (\d+) (?:minute rounds|min)$", normed)
     if matched is not None:
-        if matched.group(2) is None:
-            return [int(matched.group(1))]
         return [int(matched.group(2)) for _ in range(int(matched.group(1)))]
+
+    # 5 min one round
+    matched = re.match(r"^(\d+) min one round$", normed)
+    if matched is not None:
+        return [int(matched.group(1))]
+
+    # 5 min round plus overtime
+    matched = re.match(r"^(\d+) min round plus overtime$", normed)
+    if matched is not None:
+        return [int(matched.group(1)), int(matched.group(1))]
 
     # 5-5
     # 5-5-5
-    # 5 + 5
-    # 5 + 5 + 5
-    matched = re.match(r"^(\d+)(?:\-| \+ )(\d+)(?:(?:\-| \+ )(\d+))?", normed)
+    # 5-5-5-5
+    # 5-5 plus overtime
+    # 5-5-5 plus overtime
+    # 5-5-5-5 plus overtime
+    matched = re.match(r"^(\d+(?:\-\d+)+)( plus overtime)?$", normed)
     if matched is not None:
-        if matched.group(3) is None:
-            return [int(matched.group(1)), int(matched.group(2))]
-        return [int(matched.group(1)), int(matched.group(2)), int(matched.group(3))]
+        ret = list(map(lambda x: int(x), matched.group(1).split("-")))
+        if matched.group(2) is not None:
+            # overtime
+            return ret + [ret[-1]]
+        return ret
 
+    # 5 + 5 two rounds
+    # 5 + 5 + 5 three rounds
+    matched = re.match(r"^(\d+(?: \+ \d+)+) .* rounds$", normed)
+    if matched is not None:
+        return list(map(lambda x: int(x.strip()), matched.group(1).split("+")))
+
+    # 5 min unlim rounds
     # 1 Round, No Limit
-    if normed == "1 round, no limit":
+    if "unlim" in normed or "no limit" in normed:
         return [-1]
-    return None
-
-
-def parse_title_info(txt: str) -> Union[Dict[str, str], None]:
-    ret = {}
-
-    # champion|challenger|vacant · championship
-    # championship
-    l = list(map(lambda s: s.strip(), normalize_text(txt).split("·")))
-    if len(l) == 1:
-        return {"championship": l[0]}
-    if len(l) == 2:
-        return {"championship": l[1], "as": l[0]}
     return None
 
 
