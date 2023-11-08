@@ -20,7 +20,6 @@ def main(jsonfile: str):
         [
             "id",
             "nationality",
-            "weight_class",
             "reach",
             "height",
             "date_of_birth",
@@ -32,7 +31,6 @@ def main(jsonfile: str):
         {
             "id": pd.StringDtype(),
             "nationality": pd.StringDtype(),
-            "weight_class": pd.StringDtype(),
             "reach": pd.Float32Dtype(),
             "height": pd.Float32Dtype(),
             "date_of_birth": pd.StringDtype(),
