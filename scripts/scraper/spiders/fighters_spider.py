@@ -127,12 +127,19 @@ class FightersSpider(scrapy.Spider):
         weight_class = profile_section.xpath(
             "./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text()"
         ).get()
-        if weight_class:
+        if weight_class is not None:
             normed = normalize_weight_class(weight_class)
             if normed is not None:
                 ret["weight_class"] = normed
             else:
                 self.logger.error(f"Unexpected weight class: {weight_class}")
+
+        # Career disclosed earnings (optional)
+        career_earnings = profile_section.xpath(
+            "./ul/li/strong[text()='Career Disclosed Earnings:']/following-sibling::span[1]/text()"
+        ).re_first(r"^\$(.*) USD")
+        if career_earnings is not None:
+            ret["career_earnings"] = int(career_earnings.replace(",", ""))
 
         # Affiliation (optional)
         affili_section = profile_section.xpath(
@@ -184,6 +191,28 @@ class FightersSpider(scrapy.Spider):
                 for s in styles.split(","):
                     ret["foundation_styles"].append(s.strip())
 
+        # Place of born (optional)
+        born = profile_section.xpath(
+            "./ul/li/strong[text()='Born:']/following-sibling::span[1]/text()"
+        ).get()
+        if born is not None:
+            born = normalize_text(born)
+            if born not in VALUES_NOT_AVAILABLE:
+                ret["born"] = []
+                for p in born.split(","):
+                    ret["born"].append(p.strip())
+
+        # Fighting out of (optional)
+        out_of = profile_section.xpath(
+            "./ul/li/strong[text()='Fighting out of:']/following-sibling::span[1]/text()"
+        ).get()
+        if out_of is not None:
+            out_of = normalize_text(out_of)
+            if out_of not in VALUES_NOT_AVAILABLE:
+                ret["out_of"] = []
+                for o in out_of.split(","):
+                    ret["out_of"].append(o.strip())
+
         # Head Coach (optional)
         head_coach = profile_section.xpath(
             "./ul/li/strong[text()='Head Coach:']/following-sibling::span[1]/text()"
@@ -195,6 +224,7 @@ class FightersSpider(scrapy.Spider):
 
         # Parse bout results
         ret["results"] = []
+        career_record = {}
         for division in [DIVISION_PRO, DIVISION_AM]:
             result_sections = response.xpath(
                 f"//section[@class='fighterFightResults']/ul[@id='{division}Results']/li"
@@ -246,6 +276,22 @@ class FightersSpider(scrapy.Spider):
                 ]:
                     continue
                 item["status"] = normed_status
+
+                # Increment career record
+                if division not in career_record:
+                    career_record[division] = {}
+                if normed_sport not in career_record[division]:
+                    career_record[division][normed_sport] = {
+                        "w": 0,
+                        "l": 0,
+                        "d": 0,
+                    }
+                if normed_status == STATUS_WIN:
+                    career_record[division][normed_sport]["w"] += 1
+                elif normed_status == STATUS_LOSS:
+                    career_record[division][normed_sport]["l"] += 1
+                elif normed_status == STATUS_DRAW:
+                    career_record[division][normed_sport]["d"] += 1
 
                 # Date of the bout (must)
                 date = result_section.xpath(
@@ -525,8 +571,17 @@ class FightersSpider(scrapy.Spider):
                                         f"Unexpected format of title info: {txt}"
                                     )
                 ret["results"].append(item)
+
+            # Ignore fighters with no bout results
             if len(ret["results"]) == 0:
                 return
+            ret["career_record"] = career_record
+
+            # Get last weigh-in
+            for result in ret["results"]:
+                if "weight" in result and "weigh_in" in result["weight"]:
+                    ret["last_weigh_in"] = result["weight"]["weigh_in"]
+                    break
         return ret
 
 
