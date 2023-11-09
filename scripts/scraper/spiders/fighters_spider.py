@@ -634,9 +634,7 @@ def to_weight_class(value: float, unit: str = "kg", margin: float = 0.02) -> str
         raise ValueError(f"Unsupported unit: {unit}")
     if margin < 0 or 1 < margin:
         raise ValueError("Margin must be [0, 1]")
-    kg = value
-    if unit not in ["kg", "kgs"]:
-        kg = to_kg(value)
+    kg = to_kg(value, unit=unit)
     scale = 1 + margin
     if kg <= WEIGHT_LIMIT_ATOM * scale:
         return WEIGHT_CLASS_ATOM
@@ -700,85 +698,47 @@ def parse_odds(txt: str) -> Union[float, None]:
 
 def parse_weight(txt: str) -> Union[Dict[str, float], None]:
     normed = normalize_text(txt)
-    weight_class = None
+    split = list(map(lambda x: x.strip(), normed.split("·")))
     ret = {}
-    once = True
 
     # Heavyweight
     # 110 kg|kgs|lb|lbs
     # 110 kg|kgs|lb|lbs (49.9 kg|kgs|lb|lbs)
-    if once:
-        matched = re.match(
-            r"^(.*weight|[\d\.]+ (?:kgs?|lbs?))(?: \([\d\.]+ (?:kgs?|lbs?)\))?$", normed
+    matched = re.match(r"^(.*weight|([\d\.]+) (kgs?|lbs?))", split[0])
+    if matched is None:
+        return None
+    if matched.group(2) is not None and matched.group(3) is not None:
+        value, unit = float(matched.group(2)), matched.group(3)
+        ret["class"] = to_weight_class(value, unit=unit)
+        ret["limit"] = to_kg(value, unit=unit)
+        ret["is_open"] = ret["is_catch"] = False
+    else:
+        txt = matched.group(1)
+        ret["is_open"] = True if "open" in txt else False
+        ret["is_catch"] = True if "catch" in txt else False
+        weight_class = normalize_weight_class(txt)
+        if weight_class is not None:
+            ret["class"] = weight_class
+    for s in split[1:]:
+        # 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
+        # Weigh-In 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
+        matched = re.match(r"^(weigh-in )?([\d\.]+) (kgs?|lbs?)", s)
+        if matched is None:
+            return None
+        if matched.group(2) is None or matched.group(3) is None:
+            return None
+        value, unit = float(matched.group(2)), matched.group(3)
+        ret["limit" if matched.group(1) is None else "weigh_in"] = to_kg(
+            value, unit=unit
         )
-        if matched is not None:
-            weight_class = matched.group(1)
-            once = False
-
-    # Heavyweight · 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
-    # Heavyweight · Weigh-In 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
-    # Flyweight · 125 lbs (56.7 kg)
-    if once:
-        matched = re.match(
-            r"^(.*weight|[\d\.]+ (?:kgs?|lbs?))(?: \([\d\.]+ (?:kgs?|lbs?)\))? · (weigh-in )?([\d\.]+) (kgs?|lbs?) \([\d\.]+ (?:kgs?|lbs?)\)$",
-            normed,
-        )
-        if matched is not None:
-            weight_class = matched.group(1)
-            w = float(matched.group(3))
-            if matched.group(4).startswith("lb"):
-                w = to_kg(w)
-            if matched.group(2) is None:
-                ret["limit"] = w
-            else:
-                ret["weigh_in"] = w
-            once = False
-
-    # Heavyweight · 205 kg|kgs|lb|lbs (93.0 kg|kgs|lb|lbs) · Weigh-In 201.0 kg|kgs|lb|lbs (91.2 kg|kgs|lb|lbs)
-    if once:
-        matched = re.match(
-            r"^(.*weight|[\d\.]+ (?:kgs?|lbs?))(?: \([\d\.]+ (?:kgs?|lbs?)\))? · ([\d\.]+) (kgs?|lbs?) \([\d\.]+ (?:kgs?|lbs?)\) · weigh-in ([\d\.]+) (kgs?|lbs?) \([\d\.]+ (?:kgs?|lbs?)\)$",
-            normed,
-        )
-        if matched is not None:
-            weight_class = matched.group(1)
-            limit = float(matched.group(2))
-            if matched.group(3).startswith("lb"):
-                limit = to_kg(limit)
-            ret["limit"] = limit
-            weigh_in = float(matched.group(4))
-            if matched.group(5).startswith("lb"):
-                weigh_in = to_kg(weigh_in)
-            ret["weigh_in"] = weigh_in
-            once = False
-
-    # Normalize weight class
-    if weight_class is not None:
-        normed_weight_class = normalize_weight_class(weight_class)
-        if normed_weight_class is not None:
-            ret["class"] = normed_weight_class
-            return ret
-        matched = re.match(r"^([\d\.]+) (kgs?|lbs?)$", weight_class)
-        if matched is not None:
-            # Infer weight class
-            ret["class"] = to_weight_class(
-                float(matched.group(1)), unit=matched.group(2)
-            )
-            return ret
-        if weight_class.startswith("open") or weight_class.startswith("catch"):
-            if "weigh-in" in ret:
-                # Infer weight class from weigh-in weight
-                ret["class"] = to_weight_class(ret["weigh_in"], unit="kg")
-                return ret
-            if "limit" in ret:
-                # Infer weight class from limit weight
-                ret["class"] = to_weight_class(ret["limit"], unit="kg")
-                return ret
-            if weight_class.startswith("open"):
-                ret["class"] = "open"
-            elif weight_class.startswith("catch"):
-                ret["class"] = "catch"
-    return None if ret == {} else ret
+    if "class" not in ret:
+        if "limit" in ret:
+            ret["class"] = to_weight_class(ret["limit"])
+        elif "weigh_in" in ret:
+            ret["class"] = to_weight_class(ret["weigh_in"])
+    if ret == {}:
+        return None
+    return ret
 
 
 def parse_date(txt: str) -> Union[str, None]:
@@ -872,8 +832,12 @@ def to_meter(feet: float, inch: float) -> float:
     return feet * 0.3048 + inch * 0.0254
 
 
-def to_kg(lb: float) -> float:
-    return lb * 0.453592
+def to_kg(value: float, unit: str = "lb") -> float:
+    if unit not in ["kg", "kgs", "lb", "lbs"]:
+        raise ValueError(f"Unsupported unit: {unit}")
+    if unit.startswith("lb"):
+        return value * 0.453592
+    return value
 
 
 def infer(bout_ended_by: str) -> str:
