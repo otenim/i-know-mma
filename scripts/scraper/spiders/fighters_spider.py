@@ -100,9 +100,11 @@ class FightersSpider(scrapy.Spider):
             ret["nationality"] = normalize_text(nationality)
 
         # Nickname (optional)
-        nickname = header_section.xpath("./h4[@class='preTitle nickname']/text()").get()
-        if nickname is not None and nickname != "":
-            ret["nickname"] = normalize_text(nickname)[1:-1]
+        nickname = header_section.xpath(
+            "./h4[@class='preTitle nickname']/text()"
+        ).re_first(r"\"(.*)\"")
+        if nickname is not None:
+            ret["nickname"] = normalize_text(nickname)
 
         # Parse profile section (must)
         profile_section = response.xpath("//div[@class='details details_two_columns']")
