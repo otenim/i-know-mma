@@ -4,6 +4,7 @@ from scrapy.http import Request, TextResponse
 from collections.abc import Generator
 from typing import List, Union, Dict
 from .constants import *
+from datetime import datetime
 
 
 class FightersSpider(scrapy.Spider):
@@ -307,6 +308,13 @@ class FightersSpider(scrapy.Spider):
                     self.logger.error(f"Unexpected format of date: {date}")
                     continue
                 item["date"] = date_normed
+
+                # Calculate age of the fighter (optional)
+                if "date_of_birth" in ret:
+                    item["age"] = calc_age(
+                        datetime.strptime(date_normed, "%Y-%m-%d"),
+                        datetime.strptime(ret["date_of_birth"], "%Y-%m-%d"),
+                    )
 
                 # Parse opponent data if this is an mma bout
                 if normed_sport == SPORT_MMA:
@@ -795,6 +803,13 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
             ret["class"] = to_weight_class(ret["weigh_in"])
     if ret == {}:
         return None
+    return ret
+
+
+def calc_age(now: datetime, birth: datetime) -> int:
+    ret = now.year - birth.year - 1
+    if now.month >= birth.month and now.day >= birth.day:
+        ret += 1
     return ret
 
 
