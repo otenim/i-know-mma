@@ -51,6 +51,11 @@ def main(jsonfile: str):
     df_fighters["reach"] = df_fighters.groupby("weight_class", observed=True)[
         "reach"
     ].transform(lambda x: x.fillna(x.mean()))
+    target_columns = [
+        col for col in df_fighters.columns if col.startswith("career_record")
+    ]
+    df_fighters[target_columns] = df_fighters[target_columns].astype(pd.Int16Dtype())
+    df_fighters[target_columns] = df_fighters[target_columns].fillna(0)
     df_fighters.info()
 
 
