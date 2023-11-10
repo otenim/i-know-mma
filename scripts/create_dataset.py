@@ -58,6 +58,51 @@ def main(jsonfile: str):
     df_fighters[target_columns] = df_fighters[target_columns].fillna(0)
     df_fighters.info()
 
+    # Dataframe of results
+    df_results = (
+        pd.json_normalize(
+            jsondata,
+            "results",
+            ["id"],
+            errors="ignore",
+        )
+        .astype(
+            {
+                "division": pd.CategoricalDtype(),
+                "status": pd.CategoricalDtype(),
+                "billing": pd.CategoricalDtype(),
+                "opponent.name": pd.StringDtype(),
+                "opponent.url": pd.StringDtype(),
+                "opponent.id": pd.StringDtype(),
+                "opponent.record.w": pd.Int16Dtype(),
+                "opponent.record.l": pd.Int16Dtype(),
+                "opponent.record.d": pd.Int16Dtype(),
+                "record.w": pd.Int16Dtype(),
+                "record.l": pd.Int16Dtype(),
+                "record.d": pd.Int16Dtype(),
+                "ended_by.type": pd.CategoricalDtype(),
+                "ended_by.detail": pd.CategoricalDtype(),
+                "weight.is_open": pd.BooleanDtype(),
+                "weight.is_catch": pd.BooleanDtype(),
+                "weight.class": pd.CategoricalDtype(),
+                "weight.limit": pd.Float32Dtype(),
+                "weight.weigh_in": pd.Float32Dtype(),
+                "ended_at.round": pd.Int16Dtype(),
+                "promotion.url": pd.StringDtype(),
+                "promotion.id": pd.StringDtype(),
+                "age": pd.Int16Dtype(),
+                "odds": pd.Float32Dtype(),
+                "title_info.name": pd.StringDtype(),
+                "title_info.type": pd.CategoricalDtype(),
+                "referee": pd.CategoricalDtype(),
+                "title_info.as": pd.CategoricalDtype(),
+                "id": pd.StringDtype(),
+            }
+        )
+        .rename(columns={"id": "fighter_id"})
+    )
+    df_results.info()
+
 
 if __name__ == "__main__":
     main()
