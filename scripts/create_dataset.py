@@ -101,6 +101,8 @@ def main(jsonfile: str):
         )
         .rename(columns={"id": "fighter_id"})
     )
+    df_results["date"] = pd.to_datetime(df_results["date"], format="%Y-%m-%d")
+    df_results["ended_at.time"] = pd.to_timedelta(df_results["ended_at.time"])
     df_results.info()
 
 

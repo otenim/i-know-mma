@@ -835,9 +835,9 @@ def parse_record(txt: str) -> Union[Dict[str, int], None]:
 
 def parse_time(txt: str) -> Union[str, None]:
     normed = normalize_text(txt)
-    matched = re.match(r"^(\d+:\d+)$", normed)
+    matched = re.match(r"^(\d+):(\d+)$", normed)
     if matched is not None:
-        return matched.group(1)
+        return f"00:{int(matched.group(1)):02}:{int(matched.group(2)):02}"
     return None
 
 
