@@ -29,6 +29,8 @@ def main(jsonfile: str):
             "url",
             "name",
             "nickname",
+            "born",
+            "out_of",
             "last_weigh_in",
             "affiliation.url",
             "affiliation.name",
@@ -41,7 +43,7 @@ def main(jsonfile: str):
 
     # Convert data type
     dtypes = {
-        "id": pd.StringDtype(),
+        "id": pd.CategoricalDtype(),
         "nationality": pd.CategoricalDtype(),
         "weight_class": pd.CategoricalDtype(),
         "career_earnings": pd.Int32Dtype(),
@@ -54,10 +56,10 @@ def main(jsonfile: str):
         "status": pd.CategoricalDtype(),
         "age": pd.Int16Dtype(),
         "billing": pd.CategoricalDtype(),
-        "referee": pd.StringDtype(),
-        "promotion.id": pd.StringDtype(),
+        "referee": pd.CategoricalDtype(),
+        "promotion.id": pd.CategoricalDtype(),
         "ended_by.type": pd.CategoricalDtype(),
-        "ended_by.detail": pd.StringDtype(),
+        "ended_by.detail": pd.CategoricalDtype(),
         "ended_at.round": pd.Int16Dtype(),
         "weight.is_open": pd.BooleanDtype(),
         "weight.is_catch": pd.BooleanDtype(),
@@ -71,7 +73,7 @@ def main(jsonfile: str):
         "record.w": pd.Int16Dtype(),
         "record.l": pd.Int16Dtype(),
         "record.d": pd.Int16Dtype(),
-        "title_info.name": pd.StringDtype(),
+        "title_info.name": pd.CategoricalDtype(),
         "title_info.as": pd.CategoricalDtype(),
         "title_info.type": pd.CategoricalDtype(),
         "odds": pd.Float32Dtype(),
@@ -86,10 +88,12 @@ def main(jsonfile: str):
 
     # Inputate columns "height" & "reach"
     for c in ["height", "reach"]:
-        df[c] = df.groupby(["weight_class", "nationality"])[c].transform(
+        df[c] = df.groupby(["weight_class", "nationality"], observed=True)[c].transform(
             lambda x: x.fillna(x.mean())
         )
-        df[c] = df.groupby(["weight_class"])[c].transform(lambda x: x.fillna(x.mean()))
+        df[c] = df.groupby("weight_class", observed=True)[c].transform(
+            lambda x: x.fillna(x.mean())
+        )
         df[c] = df[c].fillna(df[c].mean())
 
     # Inputate columns "career_record.*.*"
@@ -98,8 +102,22 @@ def main(jsonfile: str):
             df[c] = df[c].fillna(0)
 
     # Inputate na values of categorical data with "unknown"
-    for c in ["nationality", "head_coach", "college", "affiliation.id"]:
+    for c in [
+        "nationality",
+        "head_coach",
+        "college",
+        "affiliation.id",
+        "referee",
+        "promotion.id",
+    ]:
         df[c] = df[c].cat.add_categories("unknown").fillna("unknown")
+
+    # Inputate column "date_of_birth"
+    print(
+        df.groupby("weight_class", observed=True).apply(
+            lambda x: x.groupby("id", observed=True)["age"].min().mean()
+        )
+    )
 
     df.info(verbose=True, show_counts=True)
 
