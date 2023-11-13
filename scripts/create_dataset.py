@@ -17,9 +17,11 @@ def main(jsonfile: str):
 
     # Load dataframe of fighter data
     df_fighters = pd.json_normalize(jsondata).drop(["results"], axis="columns")
+    df_fighters.info(verbose=True, show_counts=True)
 
     # Load dataframe of result data
     df_results = pd.json_normalize(jsondata, record_path="results", meta=["id"])
+    df_results.info(verbose=True, show_counts=True)
 
     # Merge fighters & results
     df = pd.merge(df_fighters, df_results, on="id")
@@ -77,6 +79,17 @@ def main(jsonfile: str):
     df["date_of_birth"] = pd.to_datetime(df["date_of_birth"], format="%Y-%m-%d")
     df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
     df["ended_at.time"] = pd.to_timedelta(df["ended_at.time"])
+
+    # Inputate column "nationality"
+    df["nationality"] = (
+        df["nationality"].cat.add_categories("unknown").fillna("unknown")
+    )
+
+    # Inputate columns "career_record.*.*"
+    for c in df.columns:
+        if c.startswith("career_record"):
+            df[c] = df[c].fillna(0)
+
     df.info(verbose=True, show_counts=True)
 
 
