@@ -89,7 +89,7 @@ SPORT_CUSTOM = "custom"
 
 
 # Expected values of sports
-VALUES_SPORT_MMA = ["mma"]
+VALUES_SPORT_MMA = ["mma", "pancrase"]
 VALUES_SPORT_KNUCKLE_MMA = ["knuckle_mma"]
 VALUES_SPORT_BOX = ["boxing", "boxing_cage"]
 VALUES_SPORT_KNUCKLE_BOX = ["knuckle"]
