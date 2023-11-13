@@ -24,31 +24,37 @@ def main(jsonfile: str):
     df_results.info(verbose=True, show_counts=True)
 
     # Merge fighters & results
-    df = pd.merge(df_fighters, df_results, on="id")
+    df = pd.merge(df_fighters, df_results, on="id").drop(
+        [
+            "url",
+            "name",
+            "nickname",
+            "last_weigh_in",
+            "affiliation.url",
+            "affiliation.name",
+            "promotion.url",
+            "opponent.name",
+            "opponent.url",
+        ],
+        axis="columns",
+    )
 
     # Convert data type
     dtypes = {
-        "url": pd.StringDtype(),
         "id": pd.StringDtype(),
-        "name": pd.StringDtype(),
         "nationality": pd.CategoricalDtype(),
         "weight_class": pd.CategoricalDtype(),
         "career_earnings": pd.Int32Dtype(),
-        "nickname": pd.StringDtype(),
         "height": pd.Float32Dtype(),
         "reach": pd.Float32Dtype(),
-        "last_weigh_in": pd.Float32Dtype(),
-        "affiliation.url": pd.StringDtype(),
-        "affiliation.id": pd.StringDtype(),
-        "affiliation.name": pd.StringDtype(),
-        "head_coach": pd.StringDtype(),
-        "college": pd.StringDtype(),
+        "affiliation.id": pd.CategoricalDtype(),
+        "head_coach": pd.CategoricalDtype(),
+        "college": pd.CategoricalDtype(),
         "division": pd.CategoricalDtype(),
         "status": pd.CategoricalDtype(),
         "age": pd.Int16Dtype(),
         "billing": pd.CategoricalDtype(),
         "referee": pd.StringDtype(),
-        "promotion.url": pd.StringDtype(),
         "promotion.id": pd.StringDtype(),
         "ended_by.type": pd.CategoricalDtype(),
         "ended_by.detail": pd.StringDtype(),
@@ -58,9 +64,7 @@ def main(jsonfile: str):
         "weight.class": pd.CategoricalDtype(),
         "weight.limit": pd.Float32Dtype(),
         "weight.weigh_in": pd.Float32Dtype(),
-        "opponent.name": pd.StringDtype(),
         "opponent.id": pd.StringDtype(),
-        "opponent.url": pd.StringDtype(),
         "opponent.record.w": pd.Int16Dtype(),
         "opponent.record.l": pd.Int16Dtype(),
         "opponent.record.d": pd.Int16Dtype(),
@@ -80,15 +84,22 @@ def main(jsonfile: str):
     df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
     df["ended_at.time"] = pd.to_timedelta(df["ended_at.time"])
 
-    # Inputate column "nationality"
-    df["nationality"] = (
-        df["nationality"].cat.add_categories("unknown").fillna("unknown")
-    )
+    # Inputate columns "height" & "reach"
+    for c in ["height", "reach"]:
+        df[c] = df.groupby(["weight_class", "nationality"])[c].transform(
+            lambda x: x.fillna(x.mean())
+        )
+        df[c] = df.groupby(["weight_class"])[c].transform(lambda x: x.fillna(x.mean()))
+        df[c] = df[c].fillna(df[c].mean())
 
     # Inputate columns "career_record.*.*"
     for c in df.columns:
         if c.startswith("career_record"):
             df[c] = df[c].fillna(0)
+
+    # Inputate na values of categorical data with "unknown"
+    for c in ["nationality", "head_coach", "college", "affiliation.id"]:
+        df[c] = df[c].cat.add_categories("unknown").fillna("unknown")
 
     df.info(verbose=True, show_counts=True)
 
