@@ -113,7 +113,7 @@ def main(jsonfile: str):
     ]:
         df[c] = df[c].cat.add_categories("unknown").fillna("unknown")
 
-    # Inputate column "date_of_birth"
+    # Inputate columns "date_of_birth" & "age"
     date_at_debut = (
         df.groupby("id", observed=True)["date"].min().rename(f"date_at_debut")
     )
@@ -131,8 +131,26 @@ def main(jsonfile: str):
         right_index=True,
         how="left",
     )
-    df.info(verbose=True, show_counts=True)
-    print(df["mean_age_at_debut_by_weight_class"].head())
+    df["age"].fillna(
+        (
+            (df["date"].dt.year - df["date_at_debut"].dt.year)
+            + df["mean_age_at_debut_by_weight_class"]
+        ).astype("float32"),
+        inplace=True,
+    )
+    print(
+        df[
+            [
+                "id",
+                "weight_class",
+                "date_at_debut",
+                "date_of_birth",
+                "date",
+                "age",
+                "mean_age_at_debut_by_weight_class",
+            ]
+        ].head(40)
+    )
 
 
 if __name__ == "__main__":
