@@ -1,6 +1,7 @@
 import pandas as pd
 import click
 import json
+import numpy as np
 from sklearn.preprocessing import LabelEncoder
 from scraper.spiders.constants import *
 
@@ -43,44 +44,44 @@ def main(jsonfile: str):
 
     # Convert data type
     dtypes = {
-        "id": pd.CategoricalDtype(),
-        "nationality": pd.CategoricalDtype(),
-        "weight_class": pd.CategoricalDtype(),
-        "career_earnings": pd.Int32Dtype(),
-        "height": pd.Float32Dtype(),
-        "reach": pd.Float32Dtype(),
-        "affiliation.id": pd.CategoricalDtype(),
-        "head_coach": pd.CategoricalDtype(),
-        "college": pd.CategoricalDtype(),
-        "division": pd.CategoricalDtype(),
-        "status": pd.CategoricalDtype(),
-        "age": pd.Int16Dtype(),
-        "billing": pd.CategoricalDtype(),
-        "referee": pd.CategoricalDtype(),
-        "promotion.id": pd.CategoricalDtype(),
-        "ended_by.type": pd.CategoricalDtype(),
-        "ended_by.detail": pd.CategoricalDtype(),
-        "ended_at.round": pd.Int16Dtype(),
-        "weight.is_open": pd.BooleanDtype(),
-        "weight.is_catch": pd.BooleanDtype(),
-        "weight.class": pd.CategoricalDtype(),
-        "weight.limit": pd.Float32Dtype(),
-        "weight.weigh_in": pd.Float32Dtype(),
-        "opponent.id": pd.StringDtype(),
-        "opponent.record.w": pd.Int16Dtype(),
-        "opponent.record.l": pd.Int16Dtype(),
-        "opponent.record.d": pd.Int16Dtype(),
-        "record.w": pd.Int16Dtype(),
-        "record.l": pd.Int16Dtype(),
-        "record.d": pd.Int16Dtype(),
-        "title_info.name": pd.CategoricalDtype(),
-        "title_info.as": pd.CategoricalDtype(),
-        "title_info.type": pd.CategoricalDtype(),
-        "odds": pd.Float32Dtype(),
+        "id": "category",
+        "nationality": "category",
+        "weight_class": "category",
+        "career_earnings": "float32",
+        "height": "float32",
+        "reach": "float32",
+        "affiliation.id": "category",
+        "head_coach": "category",
+        "college": "category",
+        "division": "category",
+        "status": "category",
+        "age": "float32",
+        "billing": "category",
+        "referee": "category",
+        "promotion.id": "category",
+        "ended_by.type": "category",
+        "ended_by.detail": "category",
+        "ended_at.round": "float32",
+        "weight.is_open": "boolean",
+        "weight.is_catch": "boolean",
+        "weight.class": "category",
+        "weight.limit": "float32",
+        "weight.weigh_in": "float32",
+        "opponent.id": "string",
+        "opponent.record.w": "float32",
+        "opponent.record.l": "float32",
+        "opponent.record.d": "float32",
+        "record.w": "float32",
+        "record.l": "float32",
+        "record.d": "float32",
+        "title_info.name": "category",
+        "title_info.as": "category",
+        "title_info.type": "category",
+        "odds": "float32",
     }
     for c in df.columns:
         if c.startswith("career_record"):
-            dtypes[c] = pd.Int16Dtype()
+            dtypes[c] = "float32"
     df = df.astype(dtypes)
     df["date_of_birth"] = pd.to_datetime(df["date_of_birth"], format="%Y-%m-%d")
     df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
@@ -113,14 +114,25 @@ def main(jsonfile: str):
         df[c] = df[c].cat.add_categories("unknown").fillna("unknown")
 
     # Inputate column "date_of_birth"
-    t = df.groupby("weight_class", observed=True).apply(
-        lambda x: x.groupby("id", observed=True)["age"].min().mean()
+    date_at_debut = (
+        df.groupby("id", observed=True)["date"].min().rename(f"date_at_debut")
     )
-    print(t.head())
-    d = df.groupby("id", observed=True).apply(lambda x: x["date"].min())
-    print(d.head())
-
+    df = pd.merge(df, date_at_debut, left_on="id", right_index=True, how="left")
+    mean_age_at_debut_by_weight_class = (
+        df.dropna(subset=["age"])
+        .groupby("weight_class", observed=True)
+        .apply(lambda x: x.groupby("id", observed=True)["age"].min().mean())
+        .rename(f"mean_age_at_debut_by_weight_class")
+    )
+    df = pd.merge(
+        df,
+        mean_age_at_debut_by_weight_class,
+        left_on="weight_class",
+        right_index=True,
+        how="left",
+    )
     df.info(verbose=True, show_counts=True)
+    print(df["mean_age_at_debut_by_weight_class"].head())
 
 
 if __name__ == "__main__":
