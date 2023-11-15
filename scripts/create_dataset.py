@@ -88,10 +88,10 @@ def main(jsonfile: str):
 
     # Inputate columns "height" & "reach"
     for c in ["height", "reach"]:
-        df[c] = df.groupby(["weight_class", "nationality"], observed=True)[c].transform(
-            lambda x: x.fillna(x.mean())
-        )
-        df[c] = df.groupby("weight_class", observed=True)[c].transform(
+        df[c] = df.groupby(["weight_class", "nationality"], observed=True, sort=False)[
+            c
+        ].transform(lambda x: x.fillna(x.mean()))
+        df[c] = df.groupby("weight_class", observed=True, sort=False)[c].transform(
             lambda x: x.fillna(x.mean())
         )
         df[c] = df[c].fillna(df[c].mean())
@@ -113,11 +113,11 @@ def main(jsonfile: str):
         df[c] = df[c].cat.add_categories("unknown").fillna("unknown")
 
     # Inputate column "date_of_birth"
-    print(
-        df.groupby("weight_class", observed=True).apply(
-            lambda x: x.groupby("id", observed=True)["age"].min().mean()
-        )
+    t = df.groupby("weight_class", observed=True, sort=False).apply(
+        lambda x: x.groupby("id", observed=True, sort=False)["age"].min().mean()
     )
+    d = df.groupby("id", observed=True, sort=False).apply(lambda x: x["date"].min())
+    print(d.head(5))
 
     df.info(verbose=True, show_counts=True)
 
