@@ -138,6 +138,9 @@ def main(jsonfile: str):
         ).astype("float32"),
         inplace=True,
     )
+    df["date_of_birth"].fillna(
+        df["date_at_debut"] - pd.to_timedelta(365.0 * df["age"], unit="D"), inplace=True
+    )
     print(
         df[
             [
