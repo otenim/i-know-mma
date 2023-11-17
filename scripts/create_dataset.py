@@ -38,6 +38,7 @@ def main(jsonfile: str):
             "promotion.url",
             "opponent.name",
             "opponent.url",
+            "odds",
         ],
         axis="columns",
     )
@@ -77,7 +78,6 @@ def main(jsonfile: str):
         "title_info.name": "category",
         "title_info.as": "category",
         "title_info.type": "category",
-        "odds": "float32",
     }
     for c in df.columns:
         if c.startswith("career_record"):
@@ -109,6 +109,7 @@ def main(jsonfile: str):
         "college",
         "affiliation.id",
         "referee",
+        "billing",
         "promotion.id",
     ]:
         df[c] = df[c].cat.add_categories("unknown").fillna("unknown")
@@ -141,19 +142,8 @@ def main(jsonfile: str):
     df["date_of_birth"].fillna(
         df["date_at_debut"] - pd.to_timedelta(365.0 * df["age"], unit="D"), inplace=True
     )
-    print(
-        df[
-            [
-                "id",
-                "weight_class",
-                "date_at_debut",
-                "date_of_birth",
-                "date",
-                "age",
-                "mean_age_at_debut_by_weight_class",
-            ]
-        ].head(40)
-    )
+    df = df.drop(["mean_age_at_debut_by_weight_class", "date_at_debut"], axis="columns")
+    df.info(show_counts=True, verbose=True)
 
 
 if __name__ == "__main__":
