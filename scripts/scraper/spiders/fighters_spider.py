@@ -225,7 +225,6 @@ class FightersSpider(scrapy.Spider):
 
         # Parse bout results
         ret["results"] = []
-        career_record = {}
         for division in [DIVISION_PRO, DIVISION_AM]:
             result_sections = response.xpath(
                 f"//section[@class='fighterFightResults']/ul[@id='{division}Results']/li"
@@ -256,6 +255,7 @@ class FightersSpider(scrapy.Spider):
                 if normed_sport is None:
                     self.logger.error(f"Unexpected sport value: {sport}")
                     continue
+                item["sport"] = normed_sport
 
                 # Status of the bout (must)
                 status = result_section.xpath("./@data-status").get()
@@ -277,22 +277,6 @@ class FightersSpider(scrapy.Spider):
                 ]:
                     continue
                 item["status"] = normed_status
-
-                # Increment career record
-                if division not in career_record:
-                    career_record[division] = {}
-                if normed_sport not in career_record[division]:
-                    career_record[division][normed_sport] = {
-                        "w": 0,
-                        "l": 0,
-                        "d": 0,
-                    }
-                if normed_status == STATUS_WIN:
-                    career_record[division][normed_sport]["w"] += 1
-                elif normed_status == STATUS_LOSS:
-                    career_record[division][normed_sport]["l"] += 1
-                elif normed_status == STATUS_DRAW:
-                    career_record[division][normed_sport]["d"] += 1
 
                 # Date of the bout (must)
                 date = result_section.xpath(
@@ -316,69 +300,35 @@ class FightersSpider(scrapy.Spider):
                         datetime.strptime(ret["date_of_birth"], "%Y-%m-%d"),
                     )
 
-                # Parse opponent data if this is an mma bout
-                if normed_sport == SPORT_MMA:
-                    # Opponent section (must)
-                    opponent_section = result_section.xpath(
-                        "./div[@class='result']/div[@class='opponent']"
+                # Opponent section (must)
+                opponent_section = result_section.xpath(
+                    "./div[@class='result']/div[@class='opponent']"
+                )
+                if len(opponent_section) == 0:
+                    self.logger.error(
+                        "Unexpected page structure: could not find opponent section"
                     )
-                    if len(opponent_section) == 0:
-                        self.logger.error(
-                            "Unexpected page structure: could not find opponent section"
-                        )
-                        continue
-                    item["opponent"] = {}
+                    continue
+                item["opponent"] = {}
 
-                    # Check if opponent section has a link
-                    opponent_link_section = opponent_section.xpath(
-                        "./div[@class='name']/a"
-                    )
-                    has_opponent_link = (
-                        True if len(opponent_link_section) == 1 else False
-                    )
-
-                    # Name & url of the opponent (optional)
-                    name = url = None
-                    if has_opponent_link:
-                        url = opponent_link_section.xpath("./@href").get()
-                        name = opponent_link_section.xpath("./text()").get()
-                    else:
-                        name = opponent_section.xpath(
-                            "./div[@class='name']/span/text()"
-                        ).get()
-                    name = normalize_text(name)
-                    item["opponent"]["name"] = name
-                    if url is not None:
-                        url = response.urljoin(url)
-                        item["opponent"]["url"] = url
-                        item["opponent"]["id"] = parse_id_from_url(url)
-
-                    # Career record of the opponent (optional)
-                    if has_opponent_link:
-                        opponent_record = opponent_section.xpath(
-                            "./div[@class='record']/span[@title='Opponent Record Before Fight']/text()"
-                        ).get()
-                        if opponent_record is not None:
-                            parsed = parse_record(opponent_record)
-                            if parsed is None:
-                                self.logger.error(
-                                    f"Unexpected format of fighter record: {opponent_record}"
-                                )
-                            else:
-                                item["opponent"]["record"] = parsed
-
-                    # Career record of the fighter (optional)
-                    fighter_record = opponent_section.xpath(
-                        "./div[@class='record']/span[@title='Fighter Record Before Fight']/text()"
+                # Name & url of the opponent (optional)
+                # At least name is must
+                opponent_link_section = opponent_section.xpath("./div[@class='name']/a")
+                has_opponent_link = True if len(opponent_link_section) == 1 else False
+                name = url = None
+                if has_opponent_link:
+                    url = opponent_link_section.xpath("./@href").get()
+                    name = opponent_link_section.xpath("./text()").get()
+                else:
+                    name = opponent_section.xpath(
+                        "./div[@class='name']/span/text()"
                     ).get()
-                    if fighter_record is not None:
-                        parsed = parse_record(fighter_record)
-                        if parsed is None:
-                            self.logger.error(
-                                f"Unexpected format of fighter record: {fighter_record}"
-                            )
-                        else:
-                            item["record"] = parsed
+                name = normalize_text(name)
+                item["opponent"]["name"] = name
+                if url is not None:
+                    url = response.urljoin(url)
+                    item["opponent"]["url"] = url
+                    item["opponent"]["id"] = parse_id_from_url(url)
 
                 # Promotion of the bout (optional)
                 promo_url = result_section.xpath(
@@ -583,7 +533,6 @@ class FightersSpider(scrapy.Spider):
             # Ignore fighters with no bout results
             if len(ret["results"]) == 0:
                 return
-            ret["career_record"] = career_record
 
             # Get last weigh-in
             for result in ret["results"]:
