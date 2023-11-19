@@ -1,10 +1,8 @@
 import scrapy
 import re
-from scrapy.http import Request, TextResponse
-from collections.abc import Generator
+from scrapy.http import TextResponse
 from typing import List, Union, Dict
 from .constants import *
-from datetime import datetime
 
 
 class FightersSpider(scrapy.Spider):
@@ -293,42 +291,23 @@ class FightersSpider(scrapy.Spider):
                     continue
                 item["date"] = date_normed
 
-                # Calculate age of the fighter (optional)
-                if "date_of_birth" in ret:
-                    item["age"] = calc_age(
-                        datetime.strptime(date_normed, "%Y-%m-%d"),
-                        datetime.strptime(ret["date_of_birth"], "%Y-%m-%d"),
-                    )
-
                 # Opponent section (must)
                 opponent_section = result_section.xpath(
-                    "./div[@class='result']/div[@class='opponent']"
+                    "./div[@class='result']/div[@class='opponent']/div[@class='name']/a"
                 )
                 if len(opponent_section) == 0:
-                    self.logger.error(
-                        "Unexpected page structure: could not find opponent section"
-                    )
                     continue
                 item["opponent"] = {}
 
-                # Name & url of the opponent (optional)
-                # At least name is must
-                opponent_link_section = opponent_section.xpath("./div[@class='name']/a")
-                has_opponent_link = True if len(opponent_link_section) == 1 else False
-                name = url = None
-                if has_opponent_link:
-                    url = opponent_link_section.xpath("./@href").get()
-                    name = opponent_link_section.xpath("./text()").get()
-                else:
-                    name = opponent_section.xpath(
-                        "./div[@class='name']/span/text()"
-                    ).get()
-                name = normalize_text(name)
-                item["opponent"]["name"] = name
-                if url is not None:
-                    url = response.urljoin(url)
-                    item["opponent"]["url"] = url
-                    item["opponent"]["id"] = parse_id_from_url(url)
+                # Name & url of the opponent (must)
+                opponent_url = opponent_section.xpath("./@href").get()
+                opponent_name = opponent_section.xpath("./text()").get()
+                if opponent_url is None or opponent_name is None:
+                    continue
+                opponent_url = response.urljoin(opponent_url)
+                item["opponent"]["name"] = normalize_text(opponent_name)
+                item["opponent"]["url"] = opponent_url
+                item["opponent"]["id"] = parse_id_from_url(opponent_url)
 
                 # Promotion of the bout (optional)
                 promo_url = result_section.xpath(
@@ -533,12 +512,6 @@ class FightersSpider(scrapy.Spider):
             # Ignore fighters with no bout results
             if len(ret["results"]) == 0:
                 return
-
-            # Get last weigh-in
-            for result in ret["results"]:
-                if "weight" in result and "weigh_in" in result["weight"]:
-                    ret["last_weigh_in"] = result["weight"]["weigh_in"]
-                    break
         return ret
 
 
@@ -752,13 +725,6 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
             ret["class"] = to_weight_class(ret["weigh_in"])
     if ret == {}:
         return None
-    return ret
-
-
-def calc_age(now: datetime, birth: datetime) -> int:
-    ret = now.year - birth.year - 1
-    if now.month >= birth.month and now.day >= birth.day:
-        ret += 1
     return ret
 
 
