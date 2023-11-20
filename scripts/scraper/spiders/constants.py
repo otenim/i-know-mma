@@ -108,6 +108,22 @@ VALUES_SPORT_COMBAT_JIU_JITSU = ["combat_jj"]
 VALUES_SPORT_CUSTOM = ["custom"]
 
 
+# Billing of the bout
+BILLING_MAIN = "main"
+BILLING_CO_MAIN = "co_main"
+BILLING_MAIN_CARD = "main_card"
+BILLING_PRELIM_CARD = "prelim_card"
+BILLING_POSTLIM_CARD = "postlim_card"
+
+
+# Expected values of billing
+VALUES_BILLING_MAIN = ["main event"]
+VALUES_BILLING_CO_MAIN = ["co-main event"]
+VALUES_BILLING_MAIN_CARD = ["main card"]
+VALUES_BILLING_PRELIM_CARD = ["preliminary card"]
+VALUES_BILLING_POSTLIM_CARD = ["postlim"]
+
+
 # Status of the bout
 STATUS_WIN = "win"
 STATUS_LOSS = "loss"

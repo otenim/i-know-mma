@@ -1,5 +1,6 @@
 import scrapy
 import re
+import datetime
 from scrapy.http import TextResponse
 from typing import List, Union, Dict
 from .constants import *
@@ -291,6 +292,10 @@ class FightersSpider(scrapy.Spider):
                     continue
                 item["date"] = date_normed
 
+                # Calc age (optional)
+                if "date_of_birth" in ret:
+                    item["age"] = calc_age(item["date"], ret["date_of_birth"])
+
                 # Opponent section (must)
                 opponent_section = result_section.xpath(
                     "./div[@class='result']/div[@class='opponent']/div[@class='name']/a"
@@ -446,7 +451,13 @@ class FightersSpider(scrapy.Spider):
                                 "./following-sibling::span[1]/text()"
                             ).get()
                             if billing is not None:
-                                item["billing"] = normalize_text(billing)
+                                normed = normalize_billing(billing)
+                                if normed is not None:
+                                    item["billing"] = normed
+                                else:
+                                    self.logger.error(
+                                        f"Unexpected value of billing: {billing}"
+                                    )
                         elif label == "duration:":
                             # Duration of the bout
                             # The number of rounds, the duration per round
@@ -513,6 +524,12 @@ class FightersSpider(scrapy.Spider):
             if len(ret["results"]) == 0:
                 return
         return ret
+
+
+def calc_age(date: str, date_of_birth: str) -> float:
+    d = datetime.datetime.strptime(date, "%Y-%m-%d")
+    b = datetime.datetime.strptime(date_of_birth, "%Y-%m-%d")
+    return (d - b).days / 365.25
 
 
 def normalize_text(txt: str, lower: bool = True) -> str:
@@ -616,6 +633,21 @@ def normalize_weight_class(weight_class: str) -> Union[str, None]:
     return None
 
 
+def normalize_billing(billing: str) -> Union[str, None]:
+    normed = normalize_text(billing)
+    if normed in VALUES_BILLING_MAIN:
+        return BILLING_MAIN
+    if normed in VALUES_BILLING_CO_MAIN:
+        return BILLING_CO_MAIN
+    if normed in VALUES_BILLING_MAIN_CARD:
+        return BILLING_MAIN_CARD
+    if normed in VALUES_BILLING_PRELIM_CARD:
+        return BILLING_PRELIM_CARD
+    if normed in VALUES_BILLING_POSTLIM_CARD:
+        return BILLING_POSTLIM_CARD
+    return None
+
+
 def to_weight_class(value: float, unit: str = "kg", margin: float = 0.02) -> str:
     if unit not in ["kg", "kgs", "lbs", "lb"]:
         raise ValueError(f"Unsupported unit: {unit}")
@@ -662,14 +694,11 @@ def parse_title_info(txt: str) -> Union[Dict, None]:
     if len(split) == 2:
         # Champion · UFC Featherweight Championship
         ret["as"] = normalize_text(split[0])
-        ret["name"] = normalize_text(split[1])
+        ret["for"] = normalize_text(split[1])
     elif len(split) == 1:
         # Tournament Championship
-        ret["name"] = normalize_text(split[0])
-    if "name" in ret:
-        ret["type"] = "tournament" if "tournament" in ret["name"] else "championship"
-        return ret
-    return None
+        ret["for"] = normalize_text(split[0])
+    return ret if ret != {} else None
 
 
 def parse_odds(txt: str) -> Union[float, None]:
@@ -698,11 +727,8 @@ def parse_weight(txt: str) -> Union[Dict[str, float], None]:
         value, unit = float(matched.group(2)), matched.group(3)
         ret["class"] = to_weight_class(value, unit=unit)
         ret["limit"] = to_kg(value, unit=unit)
-        ret["is_open"] = ret["is_catch"] = False
     else:
         txt = matched.group(1)
-        ret["is_open"] = True if "open" in txt else False
-        ret["is_catch"] = True if "catch" in txt else False
         weight_class = normalize_weight_class(txt)
         if weight_class is not None:
             ret["class"] = weight_class
@@ -748,11 +774,11 @@ def parse_record(txt: str) -> Union[Dict[str, int], None]:
     return None
 
 
-def parse_time(txt: str) -> Union[str, None]:
+def parse_time(txt: str) -> Union[Dict[str, int], None]:
     normed = normalize_text(txt)
     matched = re.match(r"^(\d+):(\d+)$", normed)
     if matched is not None:
-        return f"00:{int(matched.group(1)):02}:{int(matched.group(2)):02}"
+        return {"m": int(matched.group(1)), "s": int(matched.group(1))}
     return None
 
 
