@@ -823,18 +823,20 @@ def parse_round(txt: str) -> Union[int, None]:
     return None
 
 
+def calc_minutes(format: str) -> int:
+    ans = 0
+    for s in format.split("-"):
+        if s != "ot":
+            ans += int(s)
+    return ans
+
+
+def calc_rounds(format: str) -> int:
+    return len(list(filter(lambda x: x != "ot", format.split("-"))))
+
+
 def parse_regulation(txt: str) -> Union[List[int], None]:
     normed = normalize_text(txt)
-
-    def calc_minutes(format: str) -> int:
-        ans = 0
-        for s in format.split("-"):
-            if s != "ot":
-                ans += int(s)
-        return ans
-
-    def calc_rounds(format: str) -> int:
-        return len(list(filter(lambda x: x != "ot", format.split("-"))))
 
     # 5 x 5 minute rounds
     # 5 x 5 min

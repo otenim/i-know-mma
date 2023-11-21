@@ -2,8 +2,9 @@ import pandas as pd
 import click
 import json
 import numpy as np
-from sklearn.preprocessing import LabelEncoder
 from scraper.spiders.constants import *
+from scraper.spiders.fighters_spider import infer, calc_minutes, calc_rounds
+from typing import Union
 
 
 @click.command()
@@ -25,85 +26,70 @@ def main(jsonfile: str):
     df_results.info(verbose=True, show_counts=True)
 
     # Merge fighters & results
-    df = pd.merge(df_fighters, df_results, on="id").drop(
-        [
-            "url",
-            "name",
-            "nickname",
-            "born",
-            "out_of",
-            "last_weigh_in",
-            "affiliation.url",
-            "affiliation.name",
-            "promotion.url",
-            "opponent.name",
-            "opponent.url",
-            "foundation_styles",
-            "odds",
-        ],
-        axis="columns",
+    df = (
+        pd.merge(df_fighters, df_results, on="id")
+        .drop(
+            [
+                "url",
+                "name",
+                "nickname",
+                "born",
+                "out_of",
+                "affiliation.url",
+                "affiliation.name",
+                "promotion.url",
+                "opponent.name",
+                "opponent.url",
+                "foundation_styles",
+                "odds",
+                "title_info.as",
+                "title_info.for",
+            ],
+            axis="columns",
+        )
+        .astype(
+            {
+                "id": "string",
+                "nationality": "string",
+                "weight_class": "string",
+                "career_earnings": "float32",
+                "height": "float32",
+                "reach": "float32",
+                "affiliation.id": "string",
+                "head_coach": "string",
+                "college": "string",
+                "division": "string",
+                "sport": "string",
+                "status": "string",
+                "age": "float32",
+                "billing": "string",
+                "referee": "string",
+                "promotion.id": "string",
+                "ended_by.type": "string",
+                "ended_by.detail": "string",
+                "ended_at.round": "float32",
+                "ended_at.time.m": "float32",
+                "ended_at.time.s": "float32",
+                "ended_at.elapsed.m": "float32",
+                "ended_at.elapsed.s": "float32",
+                "regulation.format": "string",
+                "regulation.minutes": "float32",
+                "regulation.rounds": "float32",
+                "weight.class": "string",
+                "weight.limit": "float32",
+                "weight.weigh_in": "float32",
+                "opponent.id": "string",
+            }
+        )
     )
-
-    # Convert data type
-    dtypes = {
-        "id": "category",
-        "nationality": "category",
-        "weight_class": "category",
-        "career_earnings": "float32",
-        "height": "float32",
-        "reach": "float32",
-        "affiliation.id": "category",
-        "head_coach": "category",
-        "college": "category",
-        "division": "category",
-        "status": "category",
-        "age": "float32",
-        "billing": "category",
-        "referee": "category",
-        "promotion.id": "category",
-        "ended_by.type": "category",
-        "ended_by.detail": "category",
-        "ended_at.round": "float32",
-        "weight.is_open": "boolean",
-        "weight.is_catch": "boolean",
-        "weight.class": "category",
-        "weight.limit": "float32",
-        "weight.weigh_in": "float32",
-        "opponent.id": "category",
-        "opponent.record.w": "float32",
-        "opponent.record.l": "float32",
-        "opponent.record.d": "float32",
-        "record.w": "float32",
-        "record.l": "float32",
-        "record.d": "float32",
-        "title_info.name": "category",
-        "title_info.as": "category",
-        "title_info.type": "category",
-    }
-    for c in df.columns:
-        if c.startswith("career_record"):
-            dtypes[c] = "float32"
-    df = df.astype(dtypes)
     df["date_of_birth"] = pd.to_datetime(df["date_of_birth"], format="%Y-%m-%d")
     df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
-    df["ended_at.time"] = pd.to_timedelta(df["ended_at.time"])
 
-    # Inputate columns "height" & "reach"
-    for c in ["height", "reach"]:
-        df[c] = df.groupby(["weight_class", "nationality"], observed=True)[c].transform(
-            lambda x: x.fillna(x.mean())
-        )
-        df[c] = df.groupby("weight_class", observed=True)[c].transform(
-            lambda x: x.fillna(x.mean())
-        )
-        df[c] = df[c].fillna(df[c].mean())
+    # Fill height & reach
+    df = fill_height(df)
+    df = fill_reach(df)
 
-    # Inputate columns "career_record.*.*"
-    for c in df.columns:
-        if c.startswith("career_record"):
-            df[c] = df[c].fillna(0)
-
-    # Inputate na values of categorical data with "unknown"
+    # Fill nans with "n/a"
     for c in [
         "nationality",
         "head_coach",
@@ -113,38 +99,144 @@ def main(jsonfile: str):
         "billing",
         "promotion.id",
     ]:
-        df[c] = df[c].cat.add_categories("unknown").fillna("unknown")
+        df[c].fillna("n/a", inplace=True)
 
-    # Inputate columns "date_of_birth" & "age"
-    date_at_debut = (
-        df.groupby("id", observed=True)["date"].min().rename(f"date_at_debut")
-    )
-    df = pd.merge(df, date_at_debut, left_on="id", right_index=True, how="left")
-    mean_age_at_debut_by_weight_class = (
-        df.dropna(subset=["age"])
-        .groupby("weight_class", observed=True)
-        .apply(lambda x: x.groupby("id", observed=True)["age"].min().mean())
-        .rename(f"mean_age_at_debut_by_weight_class")
-    )
-    df = pd.merge(
-        df,
-        mean_age_at_debut_by_weight_class,
-        left_on="weight_class",
-        right_index=True,
-        how="left",
-    )
+    # Fill date_of_birth
+    df = fill_date_of_birth(df)
+
+    # Fill age
     df["age"].fillna(
-        (
-            (df["date"].dt.year - df["date_at_debut"].dt.year)
-            + df["mean_age_at_debut_by_weight_class"]
-        ).astype("float32"),
+        ((df["date"] - df["date_of_birth"]).dt.days / 365.25).astype("float32"),
         inplace=True,
     )
-    df["date_of_birth"].fillna(
-        df["date_at_debut"] - pd.to_timedelta(365.0 * df["age"], unit="D"), inplace=True
-    )
-    df = df.drop(["mean_age_at_debut_by_weight_class", "date_at_debut"], axis="columns")
+
+    # Fill weight_class
+
+    # Fill ended_by
+    df = fill_ended_by(df)
+
+    # Fill regulation
+    df = fill_regulation(df)
+
+    # Imputate column "duration"
+    # df["duration.str"] = (
+    #     df["duration"]
+    #     .apply(lambda x: x if x is np.nan else "-".join(list(map(lambda n: str(n), x))))
+    #     .astype("string")
+    # )
+    # df["duration.str"] = df.groupby(["sport", "division"])["duration.str"].transform(
+    #     lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
+    # )
+    # if count_nan(df["duration.str"]) > 0:
+    #     df["duration.str"] = df.groupby("sport")["duration.str"].transform(
+    #         lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
+    #     )
+    # if count_nan(df["duration.str"]) > 0:
+    #     df["duration.str"].fillna(df["duration.str"].mode().iat[0], inplace=True)
+    # df["duration"].fillna(
+    #     df["duration.str"].apply(
+    #         lambda x: x
+    #         if x is np.nan
+    #         else [-1]
+    #         if x == "-1"
+    #         else list(map(lambda s: int(s), x.split("-")))
+    #     ),
+    #     inplace=True,
+    # )
+    # df = df.drop(["duration.str"], axis="columns")
+    # df["duration.total"] = (
+    #     df["duration"].apply(lambda x: x if x is np.nan else sum(x)).astype("float32")
+    # )
+    # df["ended_at.elapsed"] = df["ended_at.time.m"] + df["ended_at.time.s"] / 60.0
     df.info(show_counts=True, verbose=True)
+
+
+def count_nan(x: Union[pd.Series, pd.DataFrame]) -> int:
+    if isinstance(x, pd.Series):
+        return x.isnull().sum()
+    return x.isnull().sum().sum()
+
+
+def fill_height(df: pd.DataFrame) -> pd.DataFrame:
+    df["height"] = df.groupby(["weight_class", "nationality"])["height"].transform(
+        lambda x: x.fillna(x.mean())
+    )
+    if count_nan(df["height"]) > 0:
+        df["height"] = df.groupby("weight_class")["height"].transform(
+            lambda x: x.fillna(x.mean())
+        )
+    if count_nan(df["height"]) > 0:
+        df["height"] = df["height"].fillna(df["height"].mean())
+    return df
+
+
+def fill_reach(df: pd.DataFrame) -> pd.DataFrame:
+    df["reach"] = df.groupby(["weight_class", "nationality"])["reach"].transform(
+        lambda x: x.fillna(x.mean())
+    )
+    if count_nan(df["reach"]) > 0:
+        df["reach"] = df.groupby("weight_class")["reach"].transform(
+            lambda x: x.fillna(x.mean())
+        )
+    if count_nan(df["reach"]) > 0:
+        df["reach"].fillna(df["reach"].mean(), inplace=True)
+    return df
+
+
+def fill_date_of_birth(df: pd.DataFrame) -> pd.DataFrame:
+    date_at_debut = df.groupby("id")["date"].min()
+    mean_age_at_debut = df.groupby("id")["age"].min().mean()
+    date_of_birth_inferred = (
+        date_at_debut - pd.Timedelta(mean_age_at_debut * 365.25, unit="d")
+    ).rename("date_of_birth.inferred")
+    merged = pd.merge(
+        df, date_of_birth_inferred, left_on="id", right_index=True, how="left"
+    )
+    df["date_of_birth"].fillna(merged["date_of_birth.inferred"], inplace=True)
+    return df
+
+
+def fill_ended_by(df: pd.DataFrame) -> pd.DataFrame:
+    df["ended_by.detail"] = df.groupby("id")["ended_by.detail"].transform(
+        lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
+    )
+    if count_nan(df["ended_by.detail"]) > 0:
+        df["ended_by.detail"] = df.groupby("weight_class")["ended_by.detail"].transform(
+            lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
+        )
+    if count_nan(df["ended_by.detail"]) > 0:
+        df["ended_by.detail"].fillna(df["ended_by.detail"].mode().iat[0])
+    df["ended_by.type"].fillna(
+        (df["ended_by.detail"].apply(lambda x: infer(x))).astype("string"), inplace=True
+    )
+    return df
+
+
+def fill_regulation(df: pd.DataFrame) -> pd.DataFrame:
+    df["regulation.format"] = df.groupby(["sport", "division"])[
+        "regulation.format"
+    ].transform(lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0]))
+    if count_nan(df["regulation.format"]) > 0:
+        df["regulation.format"] = df.groupby("sport")["regulation.format"].transform(
+            lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
+        )
+    if count_nan(df["regulation.format"]) > 0:
+        df["regulation.format"].fillna(
+            df["regulation.format"].mode().iat[0], inplace=True
+        )
+    df["regulation.minutes"].fillna(
+        df["regulation.format"]
+        .apply(lambda x: x if x is np.nan else calc_minutes(x))
+        .astype(df["regulation.minutes"].dtype),
+        inplace=True,
+    )
+    df["regulation.rounds"].fillna(
+        df["regulation.format"]
+        .apply(lambda x: x if x is np.nan else calc_rounds(x))
+        .astype(df["regulation.rounds"].dtype),
+        inplace=True,
+    )
+    return df
 
 
 if __name__ == "__main__":
