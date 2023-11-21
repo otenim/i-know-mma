@@ -459,15 +459,48 @@ class FightersSpider(scrapy.Spider):
                                         f"Unexpected value of billing: {billing}"
                                     )
                         elif label == "duration:":
-                            # Duration of the bout
-                            # The number of rounds, the duration per round
+                            # Regulation of the bout
                             txt = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
                             ).get()
                             if txt is not None:
-                                duration = parse_duration(txt)
-                                if duration is not None:
-                                    item["duration"] = duration
+                                regulation = parse_regulation(txt)
+                                if regulation is not None:
+                                    item["regulation"] = regulation
+                                    if (
+                                        "ended_at" in item
+                                        and "time" in item["ended_at"]
+                                        and "round" in item["ended_at"]
+                                    ):
+                                        format = regulation["format"]
+                                        format_split = format.split("-")
+                                        time, round = (
+                                            item["ended_at"]["time"],
+                                            item["ended_at"]["round"],
+                                        )
+                                        if format == "*":
+                                            item["ended_at"]["elapsed"] = time
+                                        elif (
+                                            len(format_split) == 2
+                                            and format_split[1] == "*"
+                                        ):
+                                            # e.g 5-*
+                                            item["ended_at"]["elapsed"] = {
+                                                "m": int(format_split[0]) * (round - 1)
+                                                + time["m"],
+                                                "s": time["s"] / 60,
+                                            }
+                                        else:
+                                            # 5-5-5
+                                            # 3-3-3-ot
+                                            m = time["m"]
+                                            for i in range(round - 1):
+                                                m += int(format_split[i])
+                                            item["ended_at"]["elapsed"] = {
+                                                "m": m,
+                                                "s": time["s"],
+                                            }
+
                                 else:
                                     self.logger.error(
                                         f"Unexpected format of duration: {txt}"
@@ -790,24 +823,49 @@ def parse_round(txt: str) -> Union[int, None]:
     return None
 
 
-def parse_duration(txt: str) -> Union[List[int], None]:
+def parse_regulation(txt: str) -> Union[List[int], None]:
     normed = normalize_text(txt)
+
+    def calc_minutes(format: str) -> int:
+        ans = 0
+        for s in format.split("-"):
+            if s != "ot":
+                ans += int(s)
+        return ans
+
+    def calc_rounds(format: str) -> int:
+        return len(list(filter(lambda x: x != "ot", format.split("-"))))
 
     # 5 x 5 minute rounds
     # 5 x 5 min
     matched = re.match(r"^(\d+) x (\d+)", normed)
     if matched is not None:
-        return [int(matched.group(2)) for _ in range(int(matched.group(1)))]
+        format = "-".join([matched.group(2) for _ in range(int(matched.group(1)))])
+        return {
+            "format": format,
+            "minutes": calc_minutes(format),
+            "rounds": calc_rounds(format),
+        }
 
     # 5 min one round
     matched = re.match(r"^(\d+) min one round$", normed)
     if matched is not None:
-        return [int(matched.group(1))]
+        format = matched.group(1)
+        return {
+            "format": format,
+            "minutes": calc_minutes(format),
+            "rounds": calc_rounds(format),
+        }
 
     # 5 min round plus overtime
     matched = re.match(r"^(\d+) min round plus overtime$", normed)
     if matched is not None:
-        return [int(matched.group(1)), int(matched.group(1))]
+        format = f"{matched.group(1)}-ot"
+        return {
+            "format": format,
+            "minutes": calc_minutes(format),
+            "rounds": calc_rounds(format),
+        }
 
     # 5-5
     # 5-5-5
@@ -818,22 +876,38 @@ def parse_duration(txt: str) -> Union[List[int], None]:
     # 5-5 two rounds
     matched = re.match(r"^(\d+(?:\-\d+)+)( plus overtime)?", normed)
     if matched is not None:
-        ret = list(map(lambda x: int(x), matched.group(1).split("-")))
+        format = matched.group(1)
         if matched.group(2) is not None:
-            # overtime
-            return ret + [ret[-1]]
-        return ret
+            format += "-ot"
+        return {
+            "format": format,
+            "minutes": calc_minutes(format),
+            "rounds": calc_rounds(format),
+        }
 
     # 5 + 5 two rounds
     # 5 + 5 + 5 three rounds
     matched = re.match(r"^(\d+(?: \+ \d+)+)", normed)
     if matched is not None:
-        return list(map(lambda x: int(x.strip()), matched.group(1).split("+")))
+        format = "-".join(list(map(lambda x: x.strip(), matched.group(1).split("+"))))
+        return {
+            "format": format,
+            "minutes": calc_minutes(format),
+            "rounds": calc_rounds(format),
+        }
 
     # 5 min unlim rounds
+    matched = re.match(r"^(\d+) min unlim rounds", normed)
+    if matched is not None:
+        format = matched.group(1) + "-*"
+        return {
+            "format": format,
+        }
+
     # 1 Round, No Limit
-    if "unlim" in normed or "no limit" in normed:
-        return [-1]
+    matched = re.match(r"^1 round, no limit", normed)
+    if matched is not None:
+        return {"format": "*", "rounds": 1}
     return None
 
 
