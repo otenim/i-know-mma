@@ -213,6 +213,7 @@ def fill_ended_by(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fill_regulation(df: pd.DataFrame) -> pd.DataFrame:
+    # Fill format
     df["regulation.format"] = df.groupby(["sport", "division"])[
         "regulation.format"
     ].transform(lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0]))
@@ -224,18 +225,32 @@ def fill_regulation(df: pd.DataFrame) -> pd.DataFrame:
         df["regulation.format"].fillna(
             df["regulation.format"].mode().iat[0], inplace=True
         )
-    df["regulation.minutes"].fillna(
-        df["regulation.format"]
-        .apply(lambda x: x if x is np.nan else calc_minutes(x))
-        .astype(df["regulation.minutes"].dtype),
-        inplace=True,
-    )
+
+    # Fill rounds
     df["regulation.rounds"].fillna(
         df["regulation.format"]
-        .apply(lambda x: x if x is np.nan else calc_rounds(x))
+        .apply(lambda x: x if x is np.nan else 1.0 if x == "*" else calc_rounds(x))
         .astype(df["regulation.rounds"].dtype),
         inplace=True,
     )
+    if count_nan(df["regulation.rounds"]) > 0:
+        df["regulation.rounds"].fillna(df["ended_at.round"], inplace=True)
+
+    # Fill minutes
+    df["regulation.minutes"].fillna(
+        df["regulation.format"]
+        .apply(lambda x: x if x is np.nan else np.nan if "*" in x else calc_minutes(x))
+        .astype(df["regulation.minutes"].dtype),
+        inplace=True,
+    )
+    if count_nan(df["regulation.minutes"]) > 0:
+        df["regulation.minutes"].fillna(
+            df["ended_at.elapsed.m"] + df["ended_at.elapsed.s"] / 60, inplace=True
+        )
+    if count_nan(df["regulation.minutes"]) > 0:
+        mask = df["regulation.format"] == "*"
+        masked = df["regulation.minutes"][mask]
+        df["regulation.minutes"][mask] = masked.fillna(masked.mean())
     return df
 
 
