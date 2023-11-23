@@ -118,6 +118,9 @@ def main(jsonfile: str):
     # Fill regulation
     df = fill_regulation(df)
 
+    # Fill ended_at
+    df = fill_ended_at(df)
+
     # Imputate column "duration"
     # df["duration.str"] = (
     #     df["duration"]
@@ -249,8 +252,19 @@ def fill_regulation(df: pd.DataFrame) -> pd.DataFrame:
         )
     if count_nan(df["regulation.minutes"]) > 0:
         mask = df["regulation.format"] == "*"
-        masked = df["regulation.minutes"][mask]
-        df["regulation.minutes"][mask] = masked.fillna(masked.mean())
+        masked = df.loc[mask, "regulation.minutes"]
+        df.loc[mask, "regulation.minutes"] = masked.fillna(
+            masked.mean(),
+        )
+    return df
+
+
+def fill_ended_at(df: pd.DataFrame) -> pd.DataFrame:
+    mask = df["ended_by.type"] == ENDED_BY_DECISION
+    df.loc[mask, "ended_at.elapsed.m"] = df.loc[mask, "ended_at.elapsed.m"].fillna(
+        df.loc[mask, "regulation.minutes"]
+    )
+    df.loc[mask, "ended_at.elapsed.s"] = df.loc[mask, "ended_at.elapsed.s"].fillna(0)
     return df
 
 

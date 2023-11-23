@@ -932,7 +932,7 @@ def to_kg(value: float, unit: str = "lb") -> float:
 def infer(bout_ended_by: str) -> str:
     normed = normalize_text(bout_ended_by)
     if normed == "decision":
-        return "decision"
+        return ENDED_BY_DECISION
     if (
         normed == "ko/tko"
         or normed == "knee"
@@ -948,5 +948,5 @@ def infer(bout_ended_by: str) -> str:
         or "slam" in normed
         or "fist" in normed
     ):
-        return "ko/tko"
-    return "submisson"
+        return ENDED_BY_KO_TKO
+    return ENDED_BY_SUBMISSION

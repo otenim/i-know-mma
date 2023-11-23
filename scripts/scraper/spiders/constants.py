@@ -134,6 +134,12 @@ STATUS_NO_CONTEST = "no_contest"
 STATUS_UNKNOWN = "unknown"
 
 
+# Ended by
+ENDED_BY_KO_TKO = "ko/tko"
+ENDED_BY_SUBMISSION = "submission"
+ENDED_BY_DECISION = "decision"
+
+
 # Expected values of status
 VALUES_STATUS_WIN = ["win"]
 VALUES_STATUS_LOSS = ["loss"]
