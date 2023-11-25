@@ -265,6 +265,19 @@ def fill_ended_at(df: pd.DataFrame) -> pd.DataFrame:
         df.loc[mask, "regulation.minutes"]
     )
     df.loc[mask, "ended_at.elapsed.s"] = df.loc[mask, "ended_at.elapsed.s"].fillna(0)
+
+    df["ended_at.progress"] = (
+        df["ended_at.elapsed.m"] + df["ended_at.elapsed.s"] / 60
+    ) / df["regulation.minutes"]
+    df["ended_at.progress"] = df.groupby("id")["ended_at.progress"].transform(
+        lambda x: x.fillna(x.mean())
+    )
+    if count_nan(df["ended_at.progress"]) > 0:
+        df["ended_at.progress"] = df.groupby("weight_class")[
+            "ended_at.progress"
+        ].transform(lambda x: x.fillna(x.mean()))
+    if count_nan(df["ended_at.progress"]) > 0:
+        df["ended_at.progress"].fillna(df["ended_at.progress"].mean(), inplace=True)
     return df
 
 
