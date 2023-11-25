@@ -120,37 +120,6 @@ def main(jsonfile: str):
 
     # Fill ended_at
     df = fill_ended_at(df)
-
-    # Imputate column "duration"
-    # df["duration.str"] = (
-    #     df["duration"]
-    #     .apply(lambda x: x if x is np.nan else "-".join(list(map(lambda n: str(n), x))))
-    #     .astype("string")
-    # )
-    # df["duration.str"] = df.groupby(["sport", "division"])["duration.str"].transform(
-    #     lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
-    # )
-    # if count_nan(df["duration.str"]) > 0:
-    #     df["duration.str"] = df.groupby("sport")["duration.str"].transform(
-    #         lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
-    #     )
-    # if count_nan(df["duration.str"]) > 0:
-    #     df["duration.str"].fillna(df["duration.str"].mode().iat[0], inplace=True)
-    # df["duration"].fillna(
-    #     df["duration.str"].apply(
-    #         lambda x: x
-    #         if x is np.nan
-    #         else [-1]
-    #         if x == "-1"
-    #         else list(map(lambda s: int(s), x.split("-")))
-    #     ),
-    #     inplace=True,
-    # )
-    # df = df.drop(["duration.str"], axis="columns")
-    # df["duration.total"] = (
-    #     df["duration"].apply(lambda x: x if x is np.nan else sum(x)).astype("float32")
-    # )
-    # df["ended_at.elapsed"] = df["ended_at.time.m"] + df["ended_at.time.s"] / 60.0
     df.info(show_counts=True, verbose=True)
 
 
@@ -168,8 +137,8 @@ def fill_height(df: pd.DataFrame) -> pd.DataFrame:
         df["height"] = df.groupby("weight_class")["height"].transform(
             lambda x: x.fillna(x.mean())
         )
-    if count_nan(df["height"]) > 0:
-        df["height"] = df["height"].fillna(df["height"].mean())
+        if count_nan(df["height"]) > 0:
+            df["height"].fillna(df["height"].mean(), inplace=True)
     return df
 
 
@@ -181,8 +150,8 @@ def fill_reach(df: pd.DataFrame) -> pd.DataFrame:
         df["reach"] = df.groupby("weight_class")["reach"].transform(
             lambda x: x.fillna(x.mean())
         )
-    if count_nan(df["reach"]) > 0:
-        df["reach"].fillna(df["reach"].mean(), inplace=True)
+        if count_nan(df["reach"]) > 0:
+            df["reach"].fillna(df["reach"].mean(), inplace=True)
     return df
 
 
@@ -207,8 +176,10 @@ def fill_ended_by(df: pd.DataFrame) -> pd.DataFrame:
         df["ended_by.detail"] = df.groupby("weight_class")["ended_by.detail"].transform(
             lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
         )
-    if count_nan(df["ended_by.detail"]) > 0:
-        df["ended_by.detail"].fillna(df["ended_by.detail"].mode().iat[0])
+        if count_nan(df["ended_by.detail"]) > 0:
+            df["ended_by.detail"].fillna(
+                df["ended_by.detail"].mode().iat[0], inplace=True
+            )
     df["ended_by.type"].fillna(
         (df["ended_by.detail"].apply(lambda x: infer(x))).astype("string"), inplace=True
     )
@@ -224,10 +195,10 @@ def fill_regulation(df: pd.DataFrame) -> pd.DataFrame:
         df["regulation.format"] = df.groupby("sport")["regulation.format"].transform(
             lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
         )
-    if count_nan(df["regulation.format"]) > 0:
-        df["regulation.format"].fillna(
-            df["regulation.format"].mode().iat[0], inplace=True
-        )
+        if count_nan(df["regulation.format"]) > 0:
+            df["regulation.format"].fillna(
+                df["regulation.format"].mode().iat[0], inplace=True
+            )
 
     # Fill rounds
     df["regulation.rounds"].fillna(
@@ -250,22 +221,24 @@ def fill_regulation(df: pd.DataFrame) -> pd.DataFrame:
         df["regulation.minutes"].fillna(
             df["ended_at.elapsed.m"] + df["ended_at.elapsed.s"] / 60, inplace=True
         )
-    if count_nan(df["regulation.minutes"]) > 0:
-        mask = df["regulation.format"] == "*"
-        masked = df.loc[mask, "regulation.minutes"]
-        df.loc[mask, "regulation.minutes"] = masked.fillna(
-            masked.mean(),
-        )
+        if count_nan(df["regulation.minutes"]) > 0:
+            mask = df["regulation.format"] == "*"
+            masked = df.loc[mask, "regulation.minutes"]
+            df.loc[mask, "regulation.minutes"] = masked.fillna(
+                masked.mean(),
+            )
     return df
 
 
 def fill_ended_at(df: pd.DataFrame) -> pd.DataFrame:
+    # Fill elapsed time bouts ended by decision
     mask = df["ended_by.type"] == ENDED_BY_DECISION
     df.loc[mask, "ended_at.elapsed.m"] = df.loc[mask, "ended_at.elapsed.m"].fillna(
         df.loc[mask, "regulation.minutes"]
     )
     df.loc[mask, "ended_at.elapsed.s"] = df.loc[mask, "ended_at.elapsed.s"].fillna(0)
 
+    # Progress
     df["ended_at.progress"] = (
         df["ended_at.elapsed.m"] + df["ended_at.elapsed.s"] / 60
     ) / df["regulation.minutes"]
@@ -276,8 +249,8 @@ def fill_ended_at(df: pd.DataFrame) -> pd.DataFrame:
         df["ended_at.progress"] = df.groupby("weight_class")[
             "ended_at.progress"
         ].transform(lambda x: x.fillna(x.mean()))
-    if count_nan(df["ended_at.progress"]) > 0:
-        df["ended_at.progress"].fillna(df["ended_at.progress"].mean(), inplace=True)
+        if count_nan(df["ended_at.progress"]) > 0:
+            df["ended_at.progress"].fillna(df["ended_at.progress"].mean(), inplace=True)
     return df
 
 
