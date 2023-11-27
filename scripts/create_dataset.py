@@ -85,6 +85,9 @@ def main(jsonfile: str):
     df["date_of_birth"] = pd.to_datetime(df["date_of_birth"], format="%Y-%m-%d")
     df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
 
+    # Correct dataset
+    df = correct(df)
+
     # Fill height & reach
     df = fill_height(df)
     df = fill_reach(df)
@@ -121,6 +124,15 @@ def main(jsonfile: str):
     # Fill ended_at
     df = fill_ended_at(df)
     df.info(show_counts=True, verbose=True)
+
+
+def correct(df: pd.DataFrame) -> pd.DataFrame:
+    mask = (df["id"] == "174315-crob-pugliesi") & (
+        df["date"] == pd.to_datetime("2019-10-17", format="%Y-%m-%d")
+    )
+    if mask.sum() == 1:
+        df.loc[mask, "regulation.format"] = "15"
+    return df
 
 
 def count_nan(x: Union[pd.Series, pd.DataFrame]) -> int:
