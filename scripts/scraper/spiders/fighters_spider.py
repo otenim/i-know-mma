@@ -12,15 +12,15 @@ class FightersSpider(scrapy.Spider):
 
     def __init__(
         self,
-        min_mma_bouts: int = 1,
+        min_mma_matches: int = 1,
         ignore_am_mma_fighters: bool = False,
         *args,
         **kwargs,
     ):
         super(FightersSpider, self).__init__(*args, **kwargs)
-        if min_mma_bouts < 0:
-            raise ValueError(f"min_mma_bouts expects >= 0 but {min_mma_bouts}")
-        self.min_mma_bouts = min_mma_bouts
+        if min_mma_matches < 0:
+            raise ValueError(f"min_mma_matches expects >= 0 but {min_mma_matches}")
+        self.min_mma_matches = min_mma_matches
         self.ignore_am_mma_fighters = ignore_am_mma_fighters
 
     def parse(self, response: TextResponse):
@@ -51,7 +51,7 @@ class FightersSpider(scrapy.Spider):
             total = sum(
                 [int(matched.group(2)), int(matched.group(3)), int(matched.group(4))]
             )
-            if total < self.min_mma_bouts:
+            if total < self.min_mma_matches:
                 continue
             url = fighter.xpath("./td[1]/a/@href").get()
             if url is not None:
@@ -67,11 +67,8 @@ class FightersSpider(scrapy.Spider):
     def parse_fighter(self, response: TextResponse):
         ret = {}
 
-        # Fighter url (must)
-        ret["url"] = response.url
-
         # Fighter ID (must)
-        ret["id"] = parse_id_from_url(response.url)
+        ret["id"] = get_id_from_url(response.url)
 
         # Fighter name (must)
         name = response.xpath(
@@ -147,13 +144,8 @@ class FightersSpider(scrapy.Spider):
         )
         if len(affili_section) == 1:
             url = affili_section.xpath("./@href").get()
-            name = affili_section.xpath("./text()").get()
-            if url is not None and name is not None:
-                ret["affiliation"] = {
-                    "url": response.urljoin(url),
-                    "id": parse_id_from_url(url),
-                    "name": normalize_text(name),
-                }
+            if url is not None:
+                ret["affiliation"] = get_id_from_url(url)
 
         # Height (optional)
         # e.g. "5\'9\" (175cm)"
@@ -222,7 +214,7 @@ class FightersSpider(scrapy.Spider):
             if head_coach not in VALUES_NOT_AVAILABLE:
                 ret["head_coach"] = head_coach
 
-        # Parse bout results
+        # Parse results
         ret["results"] = []
         for division in [DIVISION_PRO, DIVISION_AM]:
             result_sections = response.xpath(
@@ -231,10 +223,10 @@ class FightersSpider(scrapy.Spider):
             if len(result_sections) == 0:
                 continue
             for result_section in result_sections:
-                # Stores data of a bout
+                # Stores data of the match
                 item = {"division": division}
 
-                # Ignore inegligible bouts
+                # Ignore inegligible matches
                 txt = result_section.xpath(
                     "./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text()"
                 ).get()
@@ -243,11 +235,11 @@ class FightersSpider(scrapy.Spider):
                     if txt.startswith("record ineligible"):
                         continue
 
-                # Sport of the bout (must)
+                # Sport of the match (must)
                 sport = result_section.xpath("./@data-sport").get()
                 if sport is None:
                     self.logger.error(
-                        "Unexpected page structure: could not identify the sport of the bout"
+                        "Unexpected page structure: could not identify the sport of the match"
                     )
                     continue
                 normed_sport = normalize_sport(sport)
@@ -256,34 +248,33 @@ class FightersSpider(scrapy.Spider):
                     continue
                 item["sport"] = normed_sport
 
-                # Status of the bout (must)
+                # Status of the match (must)
                 status = result_section.xpath("./@data-status").get()
                 if status is None:
                     self.logger.error(
-                        "Unexpected page structure: could not identify the status of the bout"
+                        "Unexpected page structure: could not identify the status of the match"
                     )
                     continue
                 normed_status = normalize_status(status)
                 if normed_status is None:
                     self.logger.error(f"Unexpected status value: {status}")
                     continue
-                # Ignore bouts with status = cancelled, upcoming, unknown, no-contest
+                # Ignore matches with status = cancelled, upcoming, unknown, no-contest
                 if normed_status in [
                     STATUS_CANCELLED,
                     STATUS_UPCOMING,
                     STATUS_UNKNOWN,
-                    STATUS_NO_CONTEST,
                 ]:
                     continue
                 item["status"] = normed_status
 
-                # Date of the bout (must)
+                # Date of the match (must)
                 date = result_section.xpath(
                     "./div[@class='result']/div[@class='date']/text()"
                 ).get()
                 if date is None:
                     self.logger.error(
-                        "Unexpected page structure: could not identify the date of the bout"
+                        "Unexpected page structure: could not identify the date of the match"
                     )
                     continue
                 date_normed = parse_date(date)
@@ -292,7 +283,7 @@ class FightersSpider(scrapy.Spider):
                     continue
                 item["date"] = date_normed
 
-                # Calc age (optional)
+                # Age at the match (optional)
                 if "date_of_birth" in ret:
                     item["age"] = calc_age(item["date"], ret["date_of_birth"])
 
@@ -306,24 +297,17 @@ class FightersSpider(scrapy.Spider):
 
                 # Name & url of the opponent (must)
                 opponent_url = opponent_section.xpath("./@href").get()
-                opponent_name = opponent_section.xpath("./text()").get()
-                if opponent_url is None or opponent_name is None:
+                if opponent_url is None:
                     continue
-                opponent_url = response.urljoin(opponent_url)
-                item["opponent"]["name"] = normalize_text(opponent_name)
-                item["opponent"]["url"] = opponent_url
-                item["opponent"]["id"] = parse_id_from_url(opponent_url)
+                item["opponent"] = get_id_from_url(opponent_url)
 
-                # Promotion of the bout (optional)
+                # Promotion of the match (optional)
                 promo_url = result_section.xpath(
                     "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/@href"
                 ).get()
                 if promo_url is not None:
                     promo_url = response.urljoin(promo_url)
-                    item["promotion"] = {
-                        "url": promo_url,
-                        "id": parse_id_from_url(promo_url),
-                    }
+                    item["promotion"] = get_id_from_url(promo_url)
                 if "promotion" not in item:
                     promo_link_section = result_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='notes']/a"
@@ -334,108 +318,49 @@ class FightersSpider(scrapy.Spider):
                         if title is not None:
                             title = normalize_text(title)
                             if title == "promotion page" and promo_url is not None:
-                                promo_url = response.urljoin(promo_url)
-                                item["promotion"] = {
-                                    "url": promo_url,
-                                    "id": parse_id_from_url(promo_url),
-                                }
+                                item["promotion"] = get_id_from_url(promo_url)
 
-                # Details of the bout result (optional)
-                if normed_status in [
-                    STATUS_WIN,
-                    STATUS_LOSS,
-                    STATUS_DRAW,
-                ]:
-                    # Parse summary lead of the result
-                    lead_section = result_section.xpath(
+                # Details of the result (optional)
+                if (
+                    normed_status
+                    in [
+                        STATUS_WIN,
+                        STATUS_LOSS,
+                        STATUS_DRAW,
+                        STATUS_NO_CONTEST,
+                    ]
+                    and normed_sport == SPORT_MMA
+                ):
+                    # Parse summary of the result
+                    summary_section = result_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='lead']"
                     )
-                    if len(lead_section) == 0:
+                    if len(summary_section) == 0:
                         self.logger.error(
-                            "Unexpected page structure: could not find summary lead section"
+                            "Unexpected page structure: could not find summary section"
                         )
                     else:
-                        lead = lead_section.xpath("./a/text()[normalize-space()]").get()
-                        if lead is None:
-                            lead = lead_section.xpath(
+                        txt = summary_section.xpath(
+                            "./a/text()[normalize-space()]"
+                        ).get()
+                        if txt is None:
+                            txt = summary_section.xpath(
                                 "./text()[normalize-space()]"
                             ).get()
-                        if lead is None:
+                        if txt is None:
                             self.logger.error(
-                                "Unexpected page structure: could not find summary lead text"
+                                "Unexpected page structure: could not find summary text"
                             )
                         else:
-                            l = list(
-                                filter(
-                                    lambda x: x != "",
-                                    map(
-                                        lambda x: x.strip(),
-                                        normalize_text(lead).split("·"),
-                                    ),
-                                )
-                            )
-                            n = len(l)
-                            if not (1 <= n <= 4):
+                            parsed = parse_summary(txt)
+                            if parsed is None:
                                 self.logger.error(
-                                    f"Unexpected format of summary lead text: {lead}"
+                                    f"Unexpected format of summary: {txt}"
                                 )
                             else:
-                                if n != 1:
-                                    if n == 2:
-                                        # (win|loss|draw), (decision|finish)
-                                        if l[1] == "decision":
-                                            item["ended_by"] = {
-                                                "type": "decision",
-                                            }
-                                        else:
-                                            item["ended_by"] = {
-                                                "type": infer(l[1]),
-                                                "detail": l[1],
-                                            }
-                                    elif n == 3:
-                                        # (win|loss), finish, round
-                                        # (win|loss|draw), decision, (majority|unanimous|split)
-                                        t = infer(l[1])
-                                        if t == "decision":
-                                            item["ended_by"] = {
-                                                "type": t,
-                                                "detail": l[2],
-                                            }
-                                        else:
-                                            item["ended_by"] = {
-                                                "type": t,
-                                                "detail": l[1],
-                                            }
-                                            r = parse_round(l[2])
-                                            if r is None:
-                                                self.logger.error(
-                                                    f"Unexpected format of round: {l[2]}"
-                                                )
-                                            else:
-                                                item["ended_at"] = {"round": r}
-                                    elif n == 4:
-                                        # (win|loss), finish, time, round
-                                        item["ended_by"] = {
-                                            "type": infer(l[1]),
-                                            "detail": l[1],
-                                        }
-                                        r, t = parse_round(l[3]), parse_time(l[2])
-                                        if r is not None or t is not None:
-                                            item["ended_at"] = {}
-                                            if r is None:
-                                                self.logger.error(
-                                                    f"Unexpected format of round: {l[3]}"
-                                                )
-                                            else:
-                                                item["ended_at"]["round"] = r
-                                            if t is None:
-                                                self.logger.error(
-                                                    f"Unexpected format of time: {l[2]}"
-                                                )
-                                            else:
-                                                item["ended_at"]["time"] = t
+                                item["summary"] = parsed
 
-                    # More info about the bout (optional)
+                    # More info (optional)
                     label_sections = result_section.xpath(
                         "./div[@class='details tall']/div[@class='div']/span[@class='label']"
                     )
@@ -445,7 +370,7 @@ class FightersSpider(scrapy.Spider):
                             continue
                         label = normalize_text(label)
                         if label == "billing:":
-                            # Billing of the bout
+                            # Billing
                             # e.g "main event", "co-main event", "prelim", etc.
                             billing = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
@@ -459,48 +384,14 @@ class FightersSpider(scrapy.Spider):
                                         f"Unexpected value of billing: {billing}"
                                     )
                         elif label == "duration:":
-                            # Regulation of the bout
+                            # Format of the duration
                             txt = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
                             ).get()
                             if txt is not None:
-                                regulation = parse_regulation(txt)
-                                if regulation is not None:
-                                    item["regulation"] = regulation
-                                    if (
-                                        "ended_at" in item
-                                        and "time" in item["ended_at"]
-                                        and "round" in item["ended_at"]
-                                    ):
-                                        format = regulation["format"]
-                                        format_split = format.split("-")
-                                        time, round = (
-                                            item["ended_at"]["time"],
-                                            item["ended_at"]["round"],
-                                        )
-                                        if format == "*":
-                                            item["ended_at"]["elapsed"] = time
-                                        elif (
-                                            len(format_split) == 2
-                                            and format_split[1] == "*"
-                                        ):
-                                            # e.g 5-*
-                                            item["ended_at"]["elapsed"] = {
-                                                "m": int(format_split[0]) * (round - 1)
-                                                + time["m"],
-                                                "s": time["s"] / 60,
-                                            }
-                                        else:
-                                            # 5-5-5
-                                            # 3-3-3-ot
-                                            m = time["m"]
-                                            for i in range(round - 1):
-                                                m += int(format_split[i])
-                                            item["ended_at"]["elapsed"] = {
-                                                "m": m,
-                                                "s": time["s"],
-                                            }
-
+                                format = normalize_format(txt)
+                                if format is not None:
+                                    item["format"] = format
                                 else:
                                     self.logger.error(
                                         f"Unexpected format of duration: {txt}"
@@ -526,7 +417,7 @@ class FightersSpider(scrapy.Spider):
                                         f"Unexpected format of weight: {txt}"
                                     )
                         elif label == "odds:":
-                            # Odds of the fighter in the bout
+                            # Odds of the fighter
                             txt = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
                             ).get()
@@ -553,16 +444,10 @@ class FightersSpider(scrapy.Spider):
                                     )
                 ret["results"].append(item)
 
-            # Ignore fighters with no bout results
+            # Ignore fighters with no match results
             if len(ret["results"]) == 0:
                 return
         return ret
-
-
-def calc_age(date: str, date_of_birth: str) -> float:
-    d = datetime.datetime.strptime(date, "%Y-%m-%d")
-    b = datetime.datetime.strptime(date_of_birth, "%Y-%m-%d")
-    return (d - b).days / 365.25
 
 
 def normalize_text(txt: str, lower: bool = True) -> str:
@@ -681,42 +566,131 @@ def normalize_billing(billing: str) -> Union[str, None]:
     return None
 
 
-def to_weight_class(value: float, unit: str = "kg", margin: float = 0.02) -> str:
-    if unit not in ["kg", "kgs", "lbs", "lb"]:
-        raise ValueError(f"Unsupported unit: {unit}")
-    if margin < 0 or 1 < margin:
-        raise ValueError("Margin must be [0, 1]")
-    kg = to_kg(value, unit=unit)
-    scale = 1 + margin
-    if kg <= WEIGHT_LIMIT_ATOM * scale:
-        return WEIGHT_CLASS_ATOM
-    if kg <= WEIGHT_LIMIT_STRAW * scale:
-        return WEIGHT_CLASS_STRAW
-    if kg <= WEIGHT_LIMIT_FLY * scale:
-        return WEIGHT_CLASS_FLY
-    if kg <= WEIGHT_LIMIT_BANTAM * scale:
-        return WEIGHT_CLASS_BANTAM
-    if kg <= WEIGHT_LIMIT_FEATHER * scale:
-        return WEIGHT_CLASS_FEATHER
-    if kg <= WEIGHT_LIMIT_LIGHT * scale:
-        return WEIGHT_CLASS_LIGHT
-    if kg <= WEIGHT_LIMIT_SUPER_LIGHT * scale:
-        return WEIGHT_CLASS_SUPER_LIGHT
-    if kg <= WEIGHT_LIMIT_WELTER * scale:
-        return WEIGHT_CLASS_WELTER
-    if kg <= WEIGHT_LIMIT_SUPER_WELTER * scale:
-        return WEIGHT_CLASS_SUPER_WELTER
-    if kg <= WEIGHT_LIMIT_MIDDLE * scale:
-        return WEIGHT_CLASS_MIDDLE
-    if kg <= WEIGHT_LIMIT_SUPER_MIDDLE:
-        return WEIGHT_CLASS_SUPER_MIDDLE
-    if kg <= WEIGHT_LIMIT_LIGHT_HEAVY * scale:
-        return WEIGHT_CLASS_LIGHT_HEAVY
-    if kg <= WEIGHT_LIMIT_CRUISER * scale:
-        return WEIGHT_CLASS_CRUISER
-    if kg <= WEIGHT_LIMIT_HEAVY * scale:
-        return WEIGHT_CLASS_HEAVY
-    return WEIGHT_CLASS_SUPER_HEAVY
+def normalize_format(txt: str) -> Union[str, None]:
+    normed = normalize_text(txt)
+
+    # 5 x 5 minute rounds
+    # 5 x 5 min
+    matched = re.match(r"^(\d+) x (\d+)", normed)
+    if matched is not None:
+        format = "-".join([matched.group(2) for _ in range(int(matched.group(1)))])
+        return format
+
+    # 5 min one round
+    matched = re.match(r"^(\d+) min one round$", normed)
+    if matched is not None:
+        format = matched.group(1)
+        return format
+
+    # 5 min round plus overtime
+    matched = re.match(r"^(\d+) min round plus overtime$", normed)
+    if matched is not None:
+        format = f"{matched.group(1)}-ot"
+        return format
+
+    # 5-5
+    # 5-5-5
+    # 5-5-5-5
+    # 5-5 plus overtime
+    # 5-5-5 plus overtime
+    # 5-5-5-5 plus overtime
+    # 5-5 two rounds
+    matched = re.match(r"^(\d+(?:\-\d+)+)( plus overtime)?", normed)
+    if matched is not None:
+        format = matched.group(1)
+        if matched.group(2) is not None:
+            format += "-ot"
+        return format
+
+    # 5 + 5 two rounds
+    # 5 + 5 + 5 three rounds
+    matched = re.match(r"^(\d+(?: \+ \d+)+)", normed)
+    if matched is not None:
+        format = "-".join(list(map(lambda x: x.strip(), matched.group(1).split("+"))))
+        return format
+
+    # 5 min unlim rounds
+    matched = re.match(r"^(\d+) min unlim rounds", normed)
+    if matched is not None:
+        format = matched.group(1) + "-*"
+        return format
+
+    # 1 Round, No Limit
+    matched = re.match(r"^1 round, no limit", normed)
+    if matched is not None:
+        return "*"
+    return None
+
+
+def parse_summary(txt: str) -> Union[Dict, None]:
+    normed = normalize_text(txt)
+
+    split = list(
+        filter(lambda x: x != "", list(map(lambda x: x.strip(), normed.split("·"))))
+    )
+    normed = " · ".join(split)
+    n = len(split)
+
+    if n == 4:
+        # Loss · Punches · 2:32 · R2
+        # Win · Head Kick & Punches · 0:40 · R1
+        # Loss · Doctor Stoppage (broken Ankle) · 5:00 · R1
+        # No Contest · Accidental Kick to the Groin · 0:09 · R1
+        matched = re.match(
+            r"^(win|loss|no contest) · ([^·]+) · (\d+):(\d+) · r(\d+)$", normed
+        )
+        if matched is not None:
+            return {
+                "status": normalize_status(matched.group(1)),
+                "ended_at": {
+                    "time": {"m": int(matched.group(3)), "s": int(matched.group(4))},
+                    "round": int(matched.group(5)),
+                },
+            }
+    elif n == 3:
+        # Loss · Flying Knee & Punches · R1
+        # Loss · Rear Naked Choke · R2
+        # Win · Submission · R1
+        matched = re.match(r"^(win|loss) · ([^·]+) · r(\d+)$", normed)
+        if matched is not None:
+            return {
+                "status": normalize_status(matched.group(1)),
+                "ended_at": {"round": int(matched.group(3))},
+            }
+
+        # Win|Loss|Draw · Decision · Unanimous|Majority|Split
+        matched = re.match(
+            r"^(win|loss|draw) · decision · (unanimous|majority|split)$", normed
+        )
+        if matched is not None:
+            return {"status": normalize_status(matched.group(1))}
+
+        # No Contest · 3:15 · R1
+        matched = re.match(r"^no contest · (\d+):(\d+) · r(\d+)$", normed)
+        if matched is not None:
+            return {
+                "status": STATUS_NO_CONTEST,
+                "ended_at": {
+                    "time": {"m": int(matched.group(1)), "s": int(matched.group(2))},
+                    "round": int(matched.group(3)),
+                },
+            }
+    elif n == 2:
+        # No Contest · R3
+        matched = re.match(r"^no contest · r(\d+)$", normed)
+        if matched is not None:
+            return {
+                "status": STATUS_NO_CONTEST,
+                "ended_at": {
+                    "round": int(matched.group(1)),
+                },
+            }
+    elif n == 1:
+        # Win|Loss|Draw|No Contest
+        status = normalize_status(normed)
+        if status is not None:
+            return {"status": status}
+    return None
 
 
 def parse_title_info(txt: str) -> Union[Dict, None]:
@@ -807,22 +781,6 @@ def parse_record(txt: str) -> Union[Dict[str, int], None]:
     return None
 
 
-def parse_time(txt: str) -> Union[Dict[str, int], None]:
-    normed = normalize_text(txt)
-    matched = re.match(r"^(\d+):(\d+)$", normed)
-    if matched is not None:
-        return {"m": int(matched.group(1)), "s": int(matched.group(2))}
-    return None
-
-
-def parse_round(txt: str) -> Union[int, None]:
-    normed = normalize_text(txt)
-    matched = re.match(r"^r(\d+)$", normed)
-    if matched is not None:
-        return int(matched.group(1))
-    return None
-
-
 def calc_minutes(format: str) -> int:
     ans = 0
     for s in format.split("-"):
@@ -835,86 +793,49 @@ def calc_rounds(format: str) -> int:
     return len(list(filter(lambda x: x != "ot", format.split("-"))))
 
 
-def parse_regulation(txt: str) -> Union[List[int], None]:
-    normed = normalize_text(txt)
-
-    # 5 x 5 minute rounds
-    # 5 x 5 min
-    matched = re.match(r"^(\d+) x (\d+)", normed)
-    if matched is not None:
-        format = "-".join([matched.group(2) for _ in range(int(matched.group(1)))])
-        return {
-            "format": format,
-            "minutes": calc_minutes(format),
-            "rounds": calc_rounds(format),
-        }
-
-    # 5 min one round
-    matched = re.match(r"^(\d+) min one round$", normed)
-    if matched is not None:
-        format = matched.group(1)
-        return {
-            "format": format,
-            "minutes": calc_minutes(format),
-            "rounds": calc_rounds(format),
-        }
-
-    # 5 min round plus overtime
-    matched = re.match(r"^(\d+) min round plus overtime$", normed)
-    if matched is not None:
-        format = f"{matched.group(1)}-ot"
-        return {
-            "format": format,
-            "minutes": calc_minutes(format),
-            "rounds": calc_rounds(format),
-        }
-
-    # 5-5
-    # 5-5-5
-    # 5-5-5-5
-    # 5-5 plus overtime
-    # 5-5-5 plus overtime
-    # 5-5-5-5 plus overtime
-    # 5-5 two rounds
-    matched = re.match(r"^(\d+(?:\-\d+)+)( plus overtime)?", normed)
-    if matched is not None:
-        format = matched.group(1)
-        if matched.group(2) is not None:
-            format += "-ot"
-        return {
-            "format": format,
-            "minutes": calc_minutes(format),
-            "rounds": calc_rounds(format),
-        }
-
-    # 5 + 5 two rounds
-    # 5 + 5 + 5 three rounds
-    matched = re.match(r"^(\d+(?: \+ \d+)+)", normed)
-    if matched is not None:
-        format = "-".join(list(map(lambda x: x.strip(), matched.group(1).split("+"))))
-        return {
-            "format": format,
-            "minutes": calc_minutes(format),
-            "rounds": calc_rounds(format),
-        }
-
-    # 5 min unlim rounds
-    matched = re.match(r"^(\d+) min unlim rounds", normed)
-    if matched is not None:
-        format = matched.group(1) + "-*"
-        return {
-            "format": format,
-        }
-
-    # 1 Round, No Limit
-    matched = re.match(r"^1 round, no limit", normed)
-    if matched is not None:
-        return {"format": "*", "rounds": 1}
-    return None
+def calc_age(date: str, date_of_birth: str) -> float:
+    diff = datetime.datetime.strptime(date, "%Y-%m-%d") - datetime.datetime.strptime(
+        date_of_birth, "%Y-%m-%d"
+    )
+    return diff.days / 365.25
 
 
-def parse_id_from_url(url: str) -> str:
-    return url.split("/")[-1]
+def to_weight_class(value: float, unit: str = "kg", margin: float = 0.02) -> str:
+    if unit not in ["kg", "kgs", "lbs", "lb"]:
+        raise ValueError(f"Unsupported unit: {unit}")
+    if margin < 0 or 1 < margin:
+        raise ValueError("Margin must be [0, 1]")
+    kg = to_kg(value, unit=unit)
+    scale = 1 + margin
+    if kg <= WEIGHT_LIMIT_ATOM * scale:
+        return WEIGHT_CLASS_ATOM
+    if kg <= WEIGHT_LIMIT_STRAW * scale:
+        return WEIGHT_CLASS_STRAW
+    if kg <= WEIGHT_LIMIT_FLY * scale:
+        return WEIGHT_CLASS_FLY
+    if kg <= WEIGHT_LIMIT_BANTAM * scale:
+        return WEIGHT_CLASS_BANTAM
+    if kg <= WEIGHT_LIMIT_FEATHER * scale:
+        return WEIGHT_CLASS_FEATHER
+    if kg <= WEIGHT_LIMIT_LIGHT * scale:
+        return WEIGHT_CLASS_LIGHT
+    if kg <= WEIGHT_LIMIT_SUPER_LIGHT * scale:
+        return WEIGHT_CLASS_SUPER_LIGHT
+    if kg <= WEIGHT_LIMIT_WELTER * scale:
+        return WEIGHT_CLASS_WELTER
+    if kg <= WEIGHT_LIMIT_SUPER_WELTER * scale:
+        return WEIGHT_CLASS_SUPER_WELTER
+    if kg <= WEIGHT_LIMIT_MIDDLE * scale:
+        return WEIGHT_CLASS_MIDDLE
+    if kg <= WEIGHT_LIMIT_SUPER_MIDDLE:
+        return WEIGHT_CLASS_SUPER_MIDDLE
+    if kg <= WEIGHT_LIMIT_LIGHT_HEAVY * scale:
+        return WEIGHT_CLASS_LIGHT_HEAVY
+    if kg <= WEIGHT_LIMIT_CRUISER * scale:
+        return WEIGHT_CLASS_CRUISER
+    if kg <= WEIGHT_LIMIT_HEAVY * scale:
+        return WEIGHT_CLASS_HEAVY
+    return WEIGHT_CLASS_SUPER_HEAVY
 
 
 def to_meter(feet: float, inch: float) -> float:
@@ -929,8 +850,12 @@ def to_kg(value: float, unit: str = "lb") -> float:
     return value
 
 
-def infer(bout_ended_by: str) -> str:
-    normed = normalize_text(bout_ended_by)
+def get_id_from_url(url: str) -> str:
+    return url.split("/")[-1]
+
+
+def infer(ended_by: str) -> str:
+    normed = normalize_text(ended_by)
     if normed == "decision":
         return ENDED_BY_DECISION
     if (

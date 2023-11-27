@@ -108,7 +108,7 @@ VALUES_SPORT_COMBAT_JIU_JITSU = ["combat_jj"]
 VALUES_SPORT_CUSTOM = ["custom"]
 
 
-# Billing of the bout
+# Billing of the match
 BILLING_MAIN = "main"
 BILLING_CO_MAIN = "co_main"
 BILLING_MAIN_CARD = "main_card"
@@ -124,7 +124,7 @@ VALUES_BILLING_PRELIM_CARD = ["preliminary card"]
 VALUES_BILLING_POSTLIM_CARD = ["postlim"]
 
 
-# Status of the bout
+# Status of the match
 STATUS_WIN = "win"
 STATUS_LOSS = "loss"
 STATUS_CANCELLED = "cancelled"
@@ -132,12 +132,6 @@ STATUS_DRAW = "draw"
 STATUS_UPCOMING = "upcoming"
 STATUS_NO_CONTEST = "no_contest"
 STATUS_UNKNOWN = "unknown"
-
-
-# Ended by
-ENDED_BY_KO_TKO = "ko/tko"
-ENDED_BY_SUBMISSION = "submission"
-ENDED_BY_DECISION = "decision"
 
 
 # Expected values of status
@@ -150,7 +144,13 @@ VALUES_STATUS_NO_CONTEST = ["no contest"]
 VALUES_STATUS_UNKNOWN = ["unknown"]
 
 
-# Division of the bout
+# Ended by
+ENDED_BY_KO_TKO = "ko/tko"
+ENDED_BY_SUBMISSION = "submission"
+ENDED_BY_DECISION = "decision"
+
+
+# Division of the match
 DIVISION_PRO = "pro"
 DIVISION_AM = "am"
 

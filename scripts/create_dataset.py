@@ -84,6 +84,17 @@ def main(jsonfile: str):
     )
     df["date_of_birth"] = pd.to_datetime(df["date_of_birth"], format="%Y-%m-%d")
     df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
+    df["ended_at.time"] = df["ended_at.time.m"] + df["ended_at.time.s"] / 60
+    df["ended_at.elapsed"] = df["ended_at.elapsed.m"] + df["ended_at.elapsed.s"] / 60
+    df = df.drop(
+        [
+            "ended_at.time.m",
+            "ended_at.time.s",
+            "ended_at.elapsed.m",
+            "ended_at.elapsed.s",
+        ],
+        axis="columns",
+    )
 
     # Correct dataset
     df = correct(df)
@@ -230,9 +241,7 @@ def fill_regulation(df: pd.DataFrame) -> pd.DataFrame:
         inplace=True,
     )
     if count_nan(df["regulation.minutes"]) > 0:
-        df["regulation.minutes"].fillna(
-            df["ended_at.elapsed.m"] + df["ended_at.elapsed.s"] / 60, inplace=True
-        )
+        df["regulation.minutes"].fillna(df["ended_at.elapsed"], inplace=True)
         if count_nan(df["regulation.minutes"]) > 0:
             mask = df["regulation.format"] == "*"
             masked = df.loc[mask, "regulation.minutes"]
@@ -245,15 +254,12 @@ def fill_regulation(df: pd.DataFrame) -> pd.DataFrame:
 def fill_ended_at(df: pd.DataFrame) -> pd.DataFrame:
     # Fill elapsed time bouts ended by decision
     mask = df["ended_by.type"] == ENDED_BY_DECISION
-    df.loc[mask, "ended_at.elapsed.m"] = df.loc[mask, "ended_at.elapsed.m"].fillna(
+    df.loc[mask, "ended_at.elapsed"] = df.loc[mask, "ended_at.elapsed"].fillna(
         df.loc[mask, "regulation.minutes"]
     )
-    df.loc[mask, "ended_at.elapsed.s"] = df.loc[mask, "ended_at.elapsed.s"].fillna(0)
 
     # Progress
-    df["ended_at.progress"] = (
-        df["ended_at.elapsed.m"] + df["ended_at.elapsed.s"] / 60
-    ) / df["regulation.minutes"]
+    df["ended_at.progress"] = df["ended_at.elapsed"] / df["regulation.minutes"]
     df["ended_at.progress"] = df.groupby("id")["ended_at.progress"].transform(
         lambda x: x.fillna(x.mean())
     )
@@ -263,6 +269,20 @@ def fill_ended_at(df: pd.DataFrame) -> pd.DataFrame:
         ].transform(lambda x: x.fillna(x.mean()))
         if count_nan(df["ended_at.progress"]) > 0:
             df["ended_at.progress"].fillna(df["ended_at.progress"].mean(), inplace=True)
+
+    # Fill round
+    df["ended_at.round"].fillna(
+        np.ceil(df["regulation.rounds"] * df["ended_at.progress"]), inplace=True
+    )
+
+    # Fill elapsed
+    df["ended_at.elapsed"].fillna(
+        df["regulation.minutes"] * df["ended_at.progress"], inplace=True
+    )
+
+    # Fill time
+
+    df = df.drop(["ended_at.progress"], axis="columns")
     return df
 
 
