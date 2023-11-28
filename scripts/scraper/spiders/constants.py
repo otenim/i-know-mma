@@ -140,8 +140,19 @@ VALUES_STATUS_LOSS = ["loss"]
 VALUES_STATUS_CANCELLED = ["cancelled", "cancelled bout"]
 VALUES_STATUS_DRAW = ["draw"]
 VALUES_STATUS_UPCOMING = ["upcoming", "confirmed upcoming bout"]
-VALUES_STATUS_NO_CONTEST = ["no contest"]
+VALUES_STATUS_NO_CONTEST = ["no contest", "overturned to no contest"]
 VALUES_STATUS_UNKNOWN = ["unknown"]
+
+
+# Decision types
+DECISION_UNANIMOUS = "unanimous"
+DECISION_SPLIT = "split"
+DECISION_MAJORITY = "majority"
+DECISION_TIMELIMIT = "timelimit"
+DECISION_MEDICAL_STOPPAGE = "medical_stoppage"
+DECISION_TECHNICAL = "technical"
+DECISION_POINTS = "points"
+DECISION_UNKNOWN = "unknown"
 
 
 # Ended by

@@ -628,68 +628,114 @@ def parse_summary(txt: str) -> Union[Dict, None]:
     split = list(
         filter(lambda x: x != "", list(map(lambda x: x.strip(), normed.split("·"))))
     )
+    status = normalize_status(split[0])
+    if status is None:
+        return None
     normed = " · ".join(split)
     n = len(split)
-
     if n == 4:
-        # Loss · Punches · 2:32 · R2
-        # Win · Head Kick & Punches · 0:40 · R1
-        # Loss · Doctor Stoppage (broken Ankle) · 5:00 · R1
+        # Win|Loss · Head Kick & Punches · 0:40 · R1
         # No Contest · Accidental Kick to the Groin · 0:09 · R1
         matched = re.match(
-            r"^(win|loss|no contest) · ([^·]+) · (\d+):(\d+) · r(\d+)$", normed
+            r"^(?:win|loss|no contest) · ([^·]+) · (\d+):(\d+) · r(\d+)$", normed
         )
         if matched is not None:
             return {
-                "status": normalize_status(matched.group(1)),
+                "status": status,
                 "ended_at": {
-                    "time": {"m": int(matched.group(3)), "s": int(matched.group(4))},
-                    "round": int(matched.group(5)),
+                    "time": {"m": int(matched.group(2)), "s": int(matched.group(3))},
+                    "round": int(matched.group(4)),
                 },
             }
-    elif n == 3:
-        # Loss · Flying Knee & Punches · R1
-        # Loss · Rear Naked Choke · R2
-        # Win · Submission · R1
-        matched = re.match(r"^(win|loss) · ([^·]+) · r(\d+)$", normed)
+
+        # Draw · Draw · 5:00 · R2
+        # Draw · Majority · 3:00 · R3
+        matched = re.match(r"^draw · (draw|majority) · (\d+):(\d+) · r(\d+)$", normed)
         if matched is not None:
             return {
-                "status": normalize_status(matched.group(1)),
-                "ended_at": {"round": int(matched.group(3))},
+                "status": status,
+                "ended_at": {
+                    "time": {"m": int(matched.group(2)), "s": int(matched.group(3))},
+                    "round": int(matched.group(4)),
+                },
+            }
+
+        # Draw · Accidental Thumb to Amoussou's Eye · 4:14 · R1
+        matched = re.match(r"^draw · ([^·]+) · (\d+):(\d+) · r(\d+)$", normed)
+        if matched is not None:
+            return {
+                "status": status,
+                "time": {"m": int(matched.group(2)), "s": int(matched.group(3))},
+                "round": int(matched.group(4)),
+            }
+    elif n == 3:
+        # Win|Loss · Flying Knee & Punches · R1
+        matched = re.match(r"^(?:win|loss) · ([^·]+) · r(\d+)$", normed)
+        if matched is not None:
+            return {
+                "status": status,
+                "ended_at": {"round": int(matched.group(2))},
             }
 
         # Win|Loss|Draw · Decision · Unanimous|Majority|Split
         matched = re.match(
-            r"^(win|loss|draw) · decision · (unanimous|majority|split)$", normed
+            r"^(?:win|loss|draw) · decision · (.+)$",
+            normed,
         )
         if matched is not None:
-            return {"status": normalize_status(matched.group(1))}
+            decision_type = infer_decision_type(matched.group(1))
+            if decision_type == DECISION_UNKNOWN:
+                print(matched.group(1))
+            return {"status": status}
 
         # No Contest · 3:15 · R1
         matched = re.match(r"^no contest · (\d+):(\d+) · r(\d+)$", normed)
         if matched is not None:
             return {
-                "status": STATUS_NO_CONTEST,
+                "status": status,
                 "ended_at": {
                     "time": {"m": int(matched.group(1)), "s": int(matched.group(2))},
                     "round": int(matched.group(3)),
                 },
             }
+
+        # No Contest · Accidental Illegal Knee · R1
+        matched = re.match(r"^no contest · ([^·]+) · r(\d+)$", normed)
+        if matched is not None:
+            return {"status": status, "ended_at": {"round": int(matched.group(2))}}
     elif n == 2:
+        # Win|Loss · KO/TKO
+        matched = re.match(r"^(?:win|loss) · (.+)$", normed)
+        if matched is not None:
+            return {"status": status}
+
+        # Win|Loss|Draw · Decision
+        matched = re.match(r"^(?:win|loss|draw) · decision$", normed)
+        if matched is not None:
+            return {"status": status}
+
+        # Draw · Unanimous
+        matched = re.match(r"^draw · (unanimous)$", normed)
+        if matched is not None:
+            return {"status": status}
+
         # No Contest · R3
         matched = re.match(r"^no contest · r(\d+)$", normed)
         if matched is not None:
             return {
-                "status": STATUS_NO_CONTEST,
+                "status": status,
                 "ended_at": {
                     "round": int(matched.group(1)),
                 },
             }
+
+        # No Contest · Accidental Illegal Elbow
+        matched = re.match(r"^no contest · (.+)$", normed)
+        if matched is not None:
+            return {"status": status}
     elif n == 1:
         # Win|Loss|Draw|No Contest
-        status = normalize_status(normed)
-        if status is not None:
-            return {"status": status}
+        return {"status": status}
     return None
 
 
@@ -875,3 +921,22 @@ def infer(ended_by: str) -> str:
     ):
         return ENDED_BY_KO_TKO
     return ENDED_BY_SUBMISSION
+
+
+def infer_decision_type(decision: str) -> str:
+    normed = normalize_text(decision)
+    if "unanimous" in normed:
+        return DECISION_UNANIMOUS
+    if "majority" in normed:
+        return DECISION_MAJORITY
+    if "split" in normed or "spilt" in normed or "spit" in normed:
+        return DECISION_SPLIT
+    if "technical" in normed:
+        return DECISION_TECHNICAL
+    if "injury" in normed or "medical" in normed:
+        return DECISION_INJURY
+    if "time limit" in normed:
+        return DECISION_TIMELIMIT
+    if "points" in normed:
+        return DECISION_POINTS
+    return DECISION_UNKNOWN
