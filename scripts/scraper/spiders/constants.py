@@ -145,14 +145,14 @@ VALUES_STATUS_UNKNOWN = ["unknown"]
 
 
 # Decision types
-DECISION_UNANIMOUS = "unanimous"
-DECISION_SPLIT = "split"
-DECISION_MAJORITY = "majority"
-DECISION_TIMELIMIT = "timelimit"
-DECISION_MEDICAL_STOPPAGE = "medical_stoppage"
-DECISION_TECHNICAL = "technical"
-DECISION_POINTS = "points"
-DECISION_UNKNOWN = "unknown"
+DECISION_TYPE_UNANIMOUS = "unanimous"
+DECISION_TYPE_SPLIT = "split"
+DECISION_TYPE_MAJORITY = "majority"
+DECISION_TYPE_TIMELIMIT = "timelimit"
+DECISION_TYPE_INJURY = "injury"
+DECISION_TYPE_TECHNICAL = "technical"
+DECISION_TYPE_POINTS = "points"
+DECISION_TYPE_UNKNOWN = "unknown"
 
 
 # Ended by

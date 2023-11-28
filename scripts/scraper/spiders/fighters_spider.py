@@ -684,9 +684,14 @@ def parse_summary(txt: str) -> Union[Dict, None]:
         )
         if matched is not None:
             decision_type = infer_decision_type(matched.group(1))
-            if decision_type == DECISION_UNKNOWN:
+            if decision_type == DECISION_TYPE_UNKNOWN:
                 print(matched.group(1))
             return {"status": status}
+
+        # Draw · Washington Elbowed in Back of Head · R1
+        matched = re.match(r"^draw · ([^·]+) · r(\d+)$", normed)
+        if matched is not None:
+            return {"status": status, "ended_at": {"round": int(matched.group(2))}}
 
         # No Contest · 3:15 · R1
         matched = re.match(r"^no contest · (\d+):(\d+) · r(\d+)$", normed)
@@ -926,17 +931,17 @@ def infer(ended_by: str) -> str:
 def infer_decision_type(decision: str) -> str:
     normed = normalize_text(decision)
     if "unanimous" in normed:
-        return DECISION_UNANIMOUS
+        return DECISION_TYPE_UNANIMOUS
     if "majority" in normed:
-        return DECISION_MAJORITY
+        return DECISION_TYPE_MAJORITY
     if "split" in normed or "spilt" in normed or "spit" in normed:
-        return DECISION_SPLIT
-    if "technical" in normed:
-        return DECISION_TECHNICAL
-    if "injury" in normed or "medical" in normed:
-        return DECISION_INJURY
+        return DECISION_TYPE_SPLIT
+    if "technical" in normed or "illegal" in normed:
+        return DECISION_TYPE_TECHNICAL
+    if "injury" in normed or "medical" in normed or "doctor" in normed:
+        return DECISION_TYPE_INJURY
     if "time limit" in normed:
-        return DECISION_TIMELIMIT
+        return DECISION_TYPE_TIMELIMIT
     if "points" in normed:
-        return DECISION_POINTS
-    return DECISION_UNKNOWN
+        return DECISION_TYPE_POINTS
+    return DECISION_TYPE_UNKNOWN
