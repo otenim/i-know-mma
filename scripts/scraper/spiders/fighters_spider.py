@@ -321,16 +321,12 @@ class FightersSpider(scrapy.Spider):
                                 item["promotion"] = get_id_from_url(promo_url)
 
                 # Details of the result (optional)
-                if (
-                    normed_status
-                    in [
-                        STATUS_WIN,
-                        STATUS_LOSS,
-                        STATUS_DRAW,
-                        STATUS_NO_CONTEST,
-                    ]
-                    and normed_sport == SPORT_MMA
-                ):
+                if normed_status in [
+                    STATUS_WIN,
+                    STATUS_LOSS,
+                    STATUS_DRAW,
+                    STATUS_NO_CONTEST,
+                ]:
                     # Parse summary of the result
                     summary_section = result_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='lead']"
@@ -622,6 +618,22 @@ def normalize_format(txt: str) -> Union[str, None]:
     return None
 
 
+def parse_time(txt: str) -> Union[Dict[str, int], None]:
+    normed = normalize_text(txt)
+    matched = re.match(r"^(\d+):(\d+)$", normed)
+    if matched is not None:
+        return {"m": int(matched.group(1)), "s": int(matched.group(2))}
+    return None
+
+
+def parse_round(txt: str) -> Union[int, None]:
+    normed = normalize_text(txt)
+    matched = re.match(r"^r(\d+)$", normed)
+    if matched is not None:
+        return int(matched.group(1))
+    return None
+
+
 def parse_summary(txt: str) -> Union[Dict, None]:
     normed = normalize_text(txt)
 
@@ -637,107 +649,115 @@ def parse_summary(txt: str) -> Union[Dict, None]:
         # Win|Loss · Head Kick & Punches · 0:40 · R1
         # No Contest · Accidental Kick to the Groin · 0:09 · R1
         matched = re.match(
-            r"^(?:win|loss|no contest) · ([^·]+) · (\d+):(\d+) · r(\d+)$", normed
+            r"^(?:win|loss|no contest) · ([^·]+) · (\d+:\d+) · (r\d+)$", normed
         )
         if matched is not None:
             return {
                 "status": status,
-                "ended_at": {
-                    "time": {"m": int(matched.group(2)), "s": int(matched.group(3))},
-                    "round": int(matched.group(4)),
-                },
-            }
-
-        # Draw · Draw · 5:00 · R2
-        # Draw · Majority · 3:00 · R3
-        matched = re.match(r"^draw · (draw|majority) · (\d+):(\d+) · r(\d+)$", normed)
-        if matched is not None:
-            return {
-                "status": status,
-                "ended_at": {
-                    "time": {"m": int(matched.group(2)), "s": int(matched.group(3))},
-                    "round": int(matched.group(4)),
-                },
+                "time": parse_time(matched.group(2)),
+                "round": parse_round(matched.group(3)),
+                "method": infer_method(matched.group(1)),
+                "by": matched.group(1),
             }
 
         # Draw · Accidental Thumb to Amoussou's Eye · 4:14 · R1
-        matched = re.match(r"^draw · ([^·]+) · (\d+):(\d+) · r(\d+)$", normed)
+        # Draw · Draw · 5:00 · R2
+        # Draw · Majority · 3:00 · R3
+        matched = re.match(r"^draw · ([^·]+) · (\d+:\d+) · (r\d+)$", normed)
         if matched is not None:
             return {
-                "status": status,
-                "time": {"m": int(matched.group(2)), "s": int(matched.group(3))},
-                "round": int(matched.group(4)),
+                "status": STATUS_DRAW,
+                "time": parse_time(matched.group(2)),
+                "round": parse_round(matched.group(3)),
+                "method": METHOD_DECISION,
+                "by": infer_decision_type(matched.group(1)),
             }
     elif n == 3:
-        # Win|Loss · Flying Knee & Punches · R1
-        matched = re.match(r"^(?:win|loss) · ([^·]+) · r(\d+)$", normed)
-        if matched is not None:
-            return {
-                "status": status,
-                "ended_at": {"round": int(matched.group(2))},
-            }
-
         # Win|Loss|Draw · Decision · Unanimous|Majority|Split
         matched = re.match(
             r"^(?:win|loss|draw) · decision · (.+)$",
             normed,
         )
         if matched is not None:
-            decision_type = infer_decision_type(matched.group(1))
-            if decision_type == DECISION_TYPE_UNKNOWN:
-                print(matched.group(1))
-            return {"status": status}
+            return {
+                "status": status,
+                "method": METHOD_DECISION,
+                "by": infer_decision_type(matched.group(1)),
+            }
 
-        # Draw · Washington Elbowed in Back of Head · R1
-        matched = re.match(r"^draw · ([^·]+) · r(\d+)$", normed)
-        if matched is not None:
-            return {"status": status, "ended_at": {"round": int(matched.group(2))}}
-
-        # No Contest · 3:15 · R1
-        matched = re.match(r"^no contest · (\d+):(\d+) · r(\d+)$", normed)
+        # Win|Loss · Flying Knee & Punches · R1
+        matched = re.match(r"^(?:win|loss) · ([^·]+) · (r\d+)$", normed)
         if matched is not None:
             return {
                 "status": status,
-                "ended_at": {
-                    "time": {"m": int(matched.group(1)), "s": int(matched.group(2))},
-                    "round": int(matched.group(3)),
-                },
+                "round": parse_round(matched.group(2)),
+                "method": infer_method(matched.group(1)),
+                "by": matched.group(1),
+            }
+
+        # Draw · Washington Elbowed in Back of Head · R1
+        matched = re.match(r"^draw · ([^·]+) · (r\d+)$", normed)
+        if matched is not None:
+            return {
+                "status": STATUS_DRAW,
+                "round": parse_round(matched.group(2)),
+                "method": METHOD_DECISION,
+                "by": infer_decision_type(matched.group(1)),
+            }
+
+        # No Contest · 3:15 · R1
+        matched = re.match(r"^no contest · (\d+:\d+) · (r\d+)$", normed)
+        if matched is not None:
+            return {
+                "status": STATUS_NO_CONTEST,
+                "time": parse_time(matched.group(1)),
+                "round": parse_round(matched.group(2)),
             }
 
         # No Contest · Accidental Illegal Knee · R1
-        matched = re.match(r"^no contest · ([^·]+) · r(\d+)$", normed)
+        matched = re.match(r"^no contest · ([^·]+) · (r\d+)$", normed)
         if matched is not None:
-            return {"status": status, "ended_at": {"round": int(matched.group(2))}}
+            return {
+                "status": STATUS_NO_CONTEST,
+                "round": parse_round(matched.group(2)),
+                "by": matched.group(1),
+            }
     elif n == 2:
-        # Win|Loss · KO/TKO
-        matched = re.match(r"^(?:win|loss) · (.+)$", normed)
-        if matched is not None:
-            return {"status": status}
-
         # Win|Loss|Draw · Decision
         matched = re.match(r"^(?:win|loss|draw) · decision$", normed)
         if matched is not None:
-            return {"status": status}
+            return {
+                "status": status,
+                "method": METHOD_DECISION,
+                "by": DECISION_TYPE_UNKNOWN,
+            }
 
-        # Draw · Unanimous
-        matched = re.match(r"^draw · (unanimous)$", normed)
-        if matched is not None:
-            return {"status": status}
-
-        # No Contest · R3
-        matched = re.match(r"^no contest · r(\d+)$", normed)
+        # Win|Loss · KO/TKO
+        matched = re.match(r"^(?:win|loss) · (.+)$", normed)
         if matched is not None:
             return {
                 "status": status,
-                "ended_at": {
-                    "round": int(matched.group(1)),
-                },
+                "method": infer_method(matched.group(1)),
+                "by": matched.group(1),
             }
+
+        # Draw · Unanimous
+        if normed == "draw · unanimous":
+            return {
+                "status": STATUS_DRAW,
+                "method": METHOD_DECISION,
+                "by": DECISION_TYPE_UNANIMOUS,
+            }
+
+        # No Contest · R3
+        matched = re.match(r"^no contest · (r\d+)$", normed)
+        if matched is not None:
+            return {"status": STATUS_NO_CONTEST, "round": parse_round(matched.group(1))}
 
         # No Contest · Accidental Illegal Elbow
         matched = re.match(r"^no contest · (.+)$", normed)
         if matched is not None:
-            return {"status": status}
+            return {"status": STATUS_NO_CONTEST, "by": matched.group(1)}
     elif n == 1:
         # Win|Loss|Draw|No Contest
         return {"status": status}
@@ -905,10 +925,10 @@ def get_id_from_url(url: str) -> str:
     return url.split("/")[-1]
 
 
-def infer(ended_by: str) -> str:
-    normed = normalize_text(ended_by)
+def infer_method(by: str) -> str:
+    normed = normalize_text(by)
     if normed == "decision":
-        return ENDED_BY_DECISION
+        return METHOD_DECISION
     if (
         normed == "ko/tko"
         or normed == "knee"
@@ -924,8 +944,8 @@ def infer(ended_by: str) -> str:
         or "slam" in normed
         or "fist" in normed
     ):
-        return ENDED_BY_KO_TKO
-    return ENDED_BY_SUBMISSION
+        return METHOD_KO_TKO
+    return METHOD_SUBMISSION
 
 
 def infer_decision_type(decision: str) -> str:
@@ -936,7 +956,7 @@ def infer_decision_type(decision: str) -> str:
         return DECISION_TYPE_MAJORITY
     if "split" in normed or "spilt" in normed or "spit" in normed:
         return DECISION_TYPE_SPLIT
-    if "technical" in normed or "illegal" in normed:
+    if "technical" in normed or "illegal" in normed or "accidental" in normed:
         return DECISION_TYPE_TECHNICAL
     if "injury" in normed or "medical" in normed or "doctor" in normed:
         return DECISION_TYPE_INJURY

@@ -161,10 +161,16 @@ ENDED_BY_SUBMISSION = "submission"
 ENDED_BY_DECISION = "decision"
 
 
+# Methods
+METHOD_KO_TKO = "ko/tko"
+METHOD_SUBMISSION = "submission"
+METHOD_DECISION = "decision"
+
+
 # Division of the match
 DIVISION_PRO = "pro"
 DIVISION_AM = "am"
 
 
 # Expected values for "not available"
-VALUES_NOT_AVAILABLE = ["n/a"]
+VALUES_NOT_AVAILABLE = ["n/a", "na"]
