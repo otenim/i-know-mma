@@ -401,31 +401,27 @@ class FightersSpider(scrapy.Spider):
                             if referee is not None:
                                 item["referee"] = normalize_text(referee)
                         elif label == "weight:":
-                            # Contracted weight limit & measured weight at weigh-in
-                            txt = label_section.xpath(
+                            # Weight infomation of the match
+                            weight_summary = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
                             ).get()
-                            if txt is not None:
-                                weight = parse_weight_summary(txt)
-                                if weight is not None:
-                                    item["weight"] = weight
-                                else:
-                                    self.logger.error(
-                                        f"Unexpected format of weight: {txt}"
+                            if weight_summary is not None:
+                                try:
+                                    item["weight"] = parse_weight_summary(
+                                        weight_summary
                                     )
+                                except InvalidWeightSummaryPatternError as e:
+                                    self.logger.error(e)
                         elif label == "odds:":
                             # Odds of the fighter
-                            txt = label_section.xpath(
+                            odds = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
                             ).get()
-                            if txt is not None:
-                                odds = parse_odds(txt)
-                                if odds is not None:
-                                    item["odds"] = odds
-                                else:
-                                    self.logger.error(
-                                        f"Unexpected format of odds: {txt}"
-                                    )
+                            if odds is not None:
+                                try:
+                                    item["odds"] = parse_odds(odds)
+                                except InvalidOddsPatternError as e:
+                                    self.logger.error(e)
                         elif label == "title bout:":
                             # Title info
                             txt = label_section.xpath(
@@ -620,15 +616,20 @@ def normalize_round_format(round_format: str) -> str:
         return format
 
     # 5 min unlim rounds
-    matched = re.match(r"^(\d+) min unlim rounds", normed)
+    matched = re.match(r"^(\d+) min unlim rounds$", normed)
     if matched is not None:
         format = matched.group(1) + "-*"
         return format
 
     # 1 Round, No Limit
-    matched = re.match(r"^1 round, no limit", normed)
+    matched = re.match(r"^1 round, no limit$", normed)
     if matched is not None:
         return "*"
+
+    # 3 Rounds
+    matched = re.match(r"^(\d+) rounds$", normed)
+    if matched is not None:
+        return "-".join(["?"] * int(matched.group(1)))
     raise InvalidRoundFormatValueError(round_format)
 
 
