@@ -4,6 +4,7 @@ import datetime
 from scrapy.http import TextResponse
 from typing import List, Union, Dict
 from .constants import *
+from .errors import *
 
 
 class FightersSpider(scrapy.Spider):
@@ -385,7 +386,7 @@ class FightersSpider(scrapy.Spider):
                                 "./following-sibling::span[1]/text()"
                             ).get()
                             if txt is not None:
-                                format = normalize_format(txt)
+                                format = normalize_round_format(txt)
                                 if format is not None:
                                     item["format"] = format
                                 else:
@@ -446,15 +447,15 @@ class FightersSpider(scrapy.Spider):
         return ret
 
 
-def normalize_text(txt: str, lower: bool = True) -> str:
-    txt = " ".join(txt.split())
-    txt = txt.replace("\n", "").replace("\t", "")
+def normalize_text(text: str, lower: bool = True) -> str:
+    text = " ".join(text.split())
+    text = text.replace("\n", "").replace("\t", "")
     if lower:
-        txt = txt.lower()
-    return txt
+        text = text.lower()
+    return text
 
 
-def normalize_status(status: str) -> Union[str, None]:
+def normalize_status(status: str) -> str:
     normed = normalize_text(status)
     if normed in VALUES_STATUS_WIN:
         return STATUS_WIN
@@ -470,10 +471,10 @@ def normalize_status(status: str) -> Union[str, None]:
         return STATUS_UPCOMING
     if normed in VALUES_STATUS_UNKNOWN:
         return STATUS_UNKNOWN
-    return None
+    raise InvalidStatusValueError(status)
 
 
-def normalize_sport(sport: str) -> Union[str, None]:
+def normalize_sport(sport: str) -> str:
     normed = normalize_text(sport)
     if normed in VALUES_SPORT_MMA:
         return SPORT_MMA
@@ -509,10 +510,10 @@ def normalize_sport(sport: str) -> Union[str, None]:
         return SPORT_COMBAT_JIU_JITSU
     if normed in VALUES_SPORT_CUSTOM:
         return SPORT_CUSTOM
-    return None
+    raise InvalidSportValueError(sport)
 
 
-def normalize_weight_class(weight_class: str) -> Union[str, None]:
+def normalize_weight_class(weight_class: str) -> str:
     normed = normalize_text(weight_class)
     if normed in VALUES_WEIGHT_CLASS_ATOM:
         return WEIGHT_CLASS_ATOM
@@ -544,10 +545,10 @@ def normalize_weight_class(weight_class: str) -> Union[str, None]:
         return WEIGHT_CLASS_CRUISER
     if normed in VALUES_WEIGHT_CLASS_SUPER_HEAVY:
         return WEIGHT_CLASS_SUPER_HEAVY
-    return None
+    raise InvalidWeightClassValueError(weight_class)
 
 
-def normalize_billing(billing: str) -> Union[str, None]:
+def normalize_billing(billing: str) -> str:
     normed = normalize_text(billing)
     if normed in VALUES_BILLING_MAIN:
         return BILLING_MAIN
@@ -559,11 +560,11 @@ def normalize_billing(billing: str) -> Union[str, None]:
         return BILLING_PRELIM_CARD
     if normed in VALUES_BILLING_POSTLIM_CARD:
         return BILLING_POSTLIM_CARD
-    return None
+    raise InvalidBillingValueError(billing)
 
 
-def normalize_format(txt: str) -> Union[str, None]:
-    normed = normalize_text(txt)
+def normalize_round_format(round_format: str) -> str:
+    normed = normalize_text(round_format)
 
     # 5 x 5 minute rounds
     # 5 x 5 min
@@ -615,23 +616,23 @@ def normalize_format(txt: str) -> Union[str, None]:
     matched = re.match(r"^1 round, no limit", normed)
     if matched is not None:
         return "*"
-    return None
+    raise InvalidRoundFormatValueError(round_format)
 
 
-def parse_time(txt: str) -> Union[Dict[str, int], None]:
-    normed = normalize_text(txt)
+def parse_round_time(round_time: str) -> Dict[str, int]:
+    normed = normalize_text(round_time)
     matched = re.match(r"^(\d+):(\d+)$", normed)
     if matched is not None:
         return {"m": int(matched.group(1)), "s": int(matched.group(2))}
-    return None
+    raise InvalidRoundTimePatternError(round_time)
 
 
-def parse_round(txt: str) -> Union[int, None]:
-    normed = normalize_text(txt)
+def parse_round(round: str) -> int:
+    normed = normalize_text(round)
     matched = re.match(r"^r(\d+)$", normed)
     if matched is not None:
         return int(matched.group(1))
-    return None
+    raise InvalidRoundPatternError(round)
 
 
 def parse_summary(txt: str) -> Union[Dict, None]:
@@ -654,7 +655,7 @@ def parse_summary(txt: str) -> Union[Dict, None]:
         if matched is not None:
             return {
                 "status": status,
-                "time": parse_time(matched.group(2)),
+                "time": parse_round_time(matched.group(2)),
                 "round": parse_round(matched.group(3)),
                 "method": infer_method(matched.group(1)),
                 "by": matched.group(1),
@@ -667,7 +668,7 @@ def parse_summary(txt: str) -> Union[Dict, None]:
         if matched is not None:
             return {
                 "status": STATUS_DRAW,
-                "time": parse_time(matched.group(2)),
+                "time": parse_round_time(matched.group(2)),
                 "round": parse_round(matched.group(3)),
                 "method": METHOD_DECISION,
                 "by": infer_decision_type(matched.group(1)),
@@ -710,7 +711,7 @@ def parse_summary(txt: str) -> Union[Dict, None]:
         if matched is not None:
             return {
                 "status": STATUS_NO_CONTEST,
-                "time": parse_time(matched.group(1)),
+                "time": parse_round_time(matched.group(1)),
                 "round": parse_round(matched.group(2)),
             }
 
@@ -907,6 +908,40 @@ def to_weight_class(value: float, unit: str = "kg", margin: float = 0.02) -> str
     if kg <= WEIGHT_LIMIT_HEAVY * scale:
         return WEIGHT_CLASS_HEAVY
     return WEIGHT_CLASS_SUPER_HEAVY
+
+
+def to_weight_limit(weight_class: str) -> Union[None, float]:
+    if weight_class not in WEIGHT_CLASSES:
+        raise ValueError(f"invalid weight class: {weight_class}")
+    if weight_class == WEIGHT_CLASS_ATOM:
+        return WEIGHT_LIMIT_ATOM
+    if weight_class == WEIGHT_CLASS_STRAW:
+        return WEIGHT_LIMIT_STRAW
+    if weight_class == WEIGHT_CLASS_FLY:
+        return WEIGHT_LIMIT_FLY
+    if weight_class == WEIGHT_CLASS_BANTAM:
+        return WEIGHT_LIMIT_BANTAM
+    if weight_class == WEIGHT_CLASS_FEATHER:
+        return WEIGHT_LIMIT_FEATHER
+    if weight_class == WEIGHT_CLASS_LIGHT:
+        return WEIGHT_LIMIT_LIGHT
+    if weight_class == WEIGHT_CLASS_SUPER_LIGHT:
+        return WEIGHT_LIMIT_SUPER_LIGHT
+    if weight_class == WEIGHT_CLASS_WELTER:
+        return WEIGHT_LIMIT_WELTER
+    if weight_class == WEIGHT_CLASS_SUPER_WELTER:
+        return WEIGHT_LIMIT_SUPER_WELTER
+    if weight_class == WEIGHT_CLASS_MIDDLE:
+        return WEIGHT_LIMIT_MIDDLE
+    if weight_class == WEIGHT_CLASS_SUPER_MIDDLE:
+        return WEIGHT_LIMIT_SUPER_MIDDLE
+    if weight_class == WEIGHT_CLASS_LIGHT_HEAVY:
+        return WEIGHT_LIMIT_LIGHT_HEAVY
+    if weight_class == WEIGHT_CLASS_CRUISER:
+        return WEIGHT_LIMIT_CRUISER
+    if weight_class == WEIGHT_CLASS_HEAVY:
+        return WEIGHT_LIMIT_HEAVY
+    return WEIGHT_LIMIT_SUPER_HEAVY
 
 
 def to_meter(feet: float, inch: float) -> float:
