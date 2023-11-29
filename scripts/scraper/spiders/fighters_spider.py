@@ -310,6 +310,16 @@ class FightersSpider(scrapy.Spider):
                     continue
                 item["opponent"] = get_id_from_url(opponent_url)
 
+                # Record of the fighter (optional)
+                record = opponent_section.xpath(
+                    "./div[@class='record']/span[@title='Fighter Record Before Fight']/text()"
+                ).get()
+                if record is not None:
+                    try:
+                        item["record"] = parse_record(record)
+                    except InvalidRecordPatternError as e:
+                        self.logger.error(e)
+
                 # Promotion of the match (optional)
                 promo_url = result_section.xpath(
                     "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/@href"
@@ -345,14 +355,10 @@ class FightersSpider(scrapy.Spider):
                             "Unexpected page structure: could not find summary section"
                         )
                         continue
-                    match_summary = match_summary_section.xpath(
-                        "./a/text()[normalize-space()]"
-                    ).get()
+                    match_summary = match_summary_section.xpath("./a/text()").get()
                     if match_summary is None:
                         # No link
-                        match_summary = match_summary_section.xpath(
-                            "./text()[normalize-space()]"
-                        ).get()
+                        match_summary = match_summary_section.xpath("./text()").get()
                     if match_summary is None:
                         self.logger.error(
                             "Unexpected page structure: could not find match summary text"
