@@ -365,7 +365,10 @@ class FightersSpider(scrapy.Spider):
                         )
                         continue
                     try:
-                        item["summary"] = parse_match_summary(match_summary)
+                        summary = parse_match_summary(match_summary)
+                        for k, v in summary.items():
+                            if k != "status":
+                                item[k] = v
                     except InvalidMatchSummaryPatternError as e:
                         self.logger.error(e)
 
@@ -658,150 +661,98 @@ def parse_match_summary(match_summary: str) -> Dict:
     normed_split = list(
         filter(lambda x: x != "", list(map(lambda x: x.strip(), normed.split("·"))))
     )
+    try:
+        status = normalize_status(normed_split[0])
+    except InvalidStatusValueError as e:
+        raise InvalidMatchSummaryPatternError(match_summary)
     normed = " · ".join(normed_split)
     n = len(normed_split)
     try:
         if n == 4:
             # Win|Loss · Head Kick & Punches · 0:40 · R1
             # No Contest · Accidental Kick to the Groin · 0:09 · R1
-            matched = re.match(
-                r"^(win|loss|no contest) · ([^·]+) · (\d+:\d+) · (r\d+)$", normed
-            )
-            if matched is not None:
-                status = normalize_status(matched.group(1))
-                time = parse_round_time(matched.group(3))
-                round = parse_round(matched.group(4))
-                finisher = matched.group(2)
-                if status in [STATUS_WIN, STATUS_LOSS]:
-                    if finisher == "decision":
-                        return {
-                            "status": status,
-                            "time": time,
-                            "round": round,
-                            "method": ENDING_METHOD_DECISION_UNKNOWN,
-                        }
-                    finish_type = infer_finish_type(finisher)
-                    return {
-                        "status": status,
-                        "time": time,
-                        "round": round,
-                        "method": ENDING_METHOD_KO_TKO
-                        if finish_type == FINISH_TYPE_KO_TKO
-                        else ENDING_METHOD_SUBMISSION,
-                        "finisher": finisher,
-                    }
-                # status == STATUS_NO_CONTEST
-                no_contest_type = infer_no_contest_type(finisher)
-                return {
-                    "status": status,
-                    "time": time,
-                    "round": round,
-                    "method": ENDING_METHOD_NO_CONTEST_ACCIDENTAL
-                    if no_contest_type == NO_CONTEST_TYPE_ACCIDENTAL
-                    else ENDING_METHOD_NO_CONTEST_UNKNOWN,
-                }
             # Draw · Accidental Thumb to Amoussou's Eye · 4:14 · R1
             # Draw · Draw · 5:00 · R2
             # Draw · Majority · 3:00 · R3
-            matched = re.match(r"^draw · ([^·]+) · (\d+:\d+) · (r\d+)$", normed)
+            matched = re.match(
+                r"^(win|loss|draw|no contest) · ([^·]+) · (\d+:\d+) · (r\d+)$", normed
+            )
             if matched is not None:
+                supplemental = matched.group(2)
                 return {
-                    "status": STATUS_DRAW,
-                    "time": parse_round_time(matched.group(2)),
-                    "round": parse_round(matched.group(3)),
+                    "status": status,
+                    "time": parse_round_time(matched.group(3)),
+                    "round": parse_round(matched.group(4)),
+                    "method": infer_ending_method(status, supplemental),
+                    "supplemental": supplemental,
                 }
         elif n == 3:
             # Win|Loss|Draw · Decision · Unanimous|Majority|Split
             matched = re.match(
-                r"^(win|loss|draw) · decision · (.+)$",
+                r"^(win|loss|draw) · (decision · .+)$",
                 normed,
             )
             if matched is not None:
+                supplemental = matched.group(2)
                 return {
-                    "status": normalize_status(matched.group(1)),
-                    "method": METHOD_DECISION,
-                    "by": infer_decision_type(matched.group(2)),
+                    "status": status,
+                    "method": infer_ending_method(status, supplemental),
+                    "supplemental": supplemental,
                 }
             # Win|Loss · Flying Knee & Punches · R1
-            matched = re.match(r"^(win|loss) · ([^·]+) · (r\d+)$", normed)
-            if matched is not None:
-                return {
-                    "status": normalize_status(matched.group(1)),
-                    "round": parse_round(matched.group(3)),
-                    "method": infer_ending_method(matched.group(2)),
-                    "by": matched.group(2),
-                }
             # Draw · Washington Elbowed in Back of Head · R1
-            matched = re.match(r"^draw · ([^·]+) · (r\d+)$", normed)
+            # No Contest · Accidental Illegal Knee · R1
+            matched = re.match(
+                r"^(win|loss|draw|no contest) · ([^·]+) · (r\d+)$", normed
+            )
             if matched is not None:
+                supplemental = matched.group(2)
                 return {
-                    "status": STATUS_DRAW,
-                    "round": parse_round(matched.group(2)),
-                    "method": METHOD_DECISION,
-                    "by": infer_decision_type(matched.group(1)),
+                    "status": status,
+                    "round": parse_round(matched.group(3)),
+                    "method": infer_ending_method(status, supplemental),
+                    "supplemental": supplemental,
                 }
             # No Contest · 3:15 · R1
             matched = re.match(r"^no contest · (\d+:\d+) · (r\d+)$", normed)
             if matched is not None:
                 return {
-                    "status": STATUS_NO_CONTEST,
+                    "status": status,
                     "time": parse_round_time(matched.group(1)),
                     "round": parse_round(matched.group(2)),
-                }
-            # No Contest · Accidental Illegal Knee · R1
-            matched = re.match(r"^no contest · ([^·]+) · (r\d+)$", normed)
-            if matched is not None:
-                return {
-                    "status": STATUS_NO_CONTEST,
-                    "round": parse_round(matched.group(2)),
-                    "by": matched.group(1),
+                    "method": ENDING_METHOD_NO_CONTEST_UNKNOWN,
                 }
         elif n == 2:
             # Win|Loss|Draw · Decision
-            matched = re.match(r"^(win|loss|draw) · decision$", normed)
-            if matched is not None:
-                return {
-                    "status": normalize_status(matched.group(1)),
-                    "method": METHOD_DECISION,
-                    "by": DECISION_TYPE_UNKNOWN,
-                }
             # Win|Loss · KO/TKO
-            matched = re.match(r"^(win|loss) · (.+)$", normed)
-            if matched is not None:
-                return {
-                    "status": normalize_status(matched.group(1)),
-                    "method": infer_ending_method(matched.group(2)),
-                    "by": matched.group(2),
-                }
             # Draw · Unanimous|Majority|Split
-            matched = re.match(r"^draw · (unanimous|majority|split)$", normed)
+            # No Contest · Accidental Illegal Elbow
+            matched = re.match(r"^(win|loss|draw|no contest) · (.+)$", normed)
             if matched is not None:
+                supplemental = matched.group(2)
                 return {
-                    "status": STATUS_DRAW,
-                    "method": METHOD_DECISION,
-                    "by": matched.group(1),
-                }
-            # Draw · Kimura
-            matched = re.match(r"^draw · (.+)$", normed)
-            if matched is not None:
-                return {
-                    "status": STATUS_DRAW,
-                    "method": METHOD_DECISION,
+                    "status": status,
+                    "method": infer_ending_method(status, supplemental),
+                    "supplemental": supplemental,
                 }
             # No Contest · R3
             matched = re.match(r"^no contest · (r\d+)$", normed)
             if matched is not None:
                 return {
-                    "status": STATUS_NO_CONTEST,
+                    "status": status,
                     "round": parse_round(matched.group(1)),
+                    "method": ENDING_METHOD_NO_CONTEST_UNKNOWN,
                 }
-            # No Contest · Accidental Illegal Elbow
-            matched = re.match(r"^no contest · (.+)$", normed)
-            if matched is not None:
-                return {"status": STATUS_NO_CONTEST, "by": matched.group(1)}
         elif n == 1:
             # Win|Loss|Draw|No Contest
-            return {"status": normalize_status(normed)}
+            return {
+                "status": status,
+                "method": ENDING_METHOD_DRAW_UNKNOWN
+                if status == STATUS_DRAW
+                else ENDING_METHOD_NO_CONTEST_UNKNOWN
+                if status == STATUS_NO_CONTEST
+                else ENDING_METHOD_UNKNOWN,
+            }
     except (
         InvalidRoundTimePatternError,
         InvalidRoundPatternError,
@@ -1006,53 +957,64 @@ def get_id_from_url(url: str) -> str:
     return url.split("/")[-1]
 
 
-def infer_finish_type(supplemental: str) -> str:
-    normed = normalize_text(supplemental)
-    if (
-        normed == "ko/tko"
-        or normed == "knee"
-        or "kick" in normed
-        or "punch" in normed
-        or "elbow" in normed
-        or "stoppage" in normed
-        or "cut" in normed
-        or "retirement" in normed
-        or "pound" in normed
-        or "strike" in normed
-        or "towel" in normed
-        or "slam" in normed
-        or "fist" in normed
-    ):
-        return FINISH_TYPE_KO_TKO
-    return FINISH_TYPE_SUBMISSION
-
-
-def infer_no_contest_type(supplemental: str) -> str:
-    normed = normalize_text(supplemental)
-    if "accidental" in normed:
-        return NO_CONTEST_TYPE_ACCIDENTAL
-    return NO_CONTEST_TYPE_UNKNOWN
-
-
-def infer_draw_type(supplemental: str) -> str:
-    normed = normalize_text(supplemental)
-    pass
-
-
-def infer_decision_type(supplemental: str) -> str:
-    normed = normalize_text(supplemental)
-    if "unanimous" in normed:
-        return DECISION_TYPE_UNANIMOUS
-    if "majority" in normed:
-        return DECISION_TYPE_MAJORITY
-    if "split" in normed or "spilt" in normed or "spit" in normed:
-        return DECISION_TYPE_SPLIT
-    if "technical" in normed or "illegal" in normed or "accidental" in normed:
-        return DECISION_TYPE_TECHNICAL
-    if "injury" in normed or "medical" in normed or "doctor" in normed:
-        return DECISION_TYPE_INJURY
-    if "time limit" in normed:
-        return DECISION_TYPE_TIMELIMIT
-    if "points" in normed:
-        return DECISION_TYPE_POINTS
-    return DECISION_TYPE_UNKNOWN
+def infer_ending_method(status: str, supplemental: str) -> str:
+    status = normalize_status(status)
+    supplemental = normalize_text(supplemental)
+    if status not in [STATUS_WIN, STATUS_LOSS, STATUS_DRAW, STATUS_NO_CONTEST]:
+        raise ValueError(
+            f"unexpected status: {status} (one of {STATUS_WIN}, {STATUS_LOSS}, {STATUS_DRAW} or {STATUS_NO_CONTEST} is expected)"
+        )
+    # Win|Loss
+    if status in [STATUS_WIN, STATUS_LOSS]:
+        # Decision
+        if "decision" in supplemental:
+            if "unanimous" in supplemental:
+                return ENDING_METHOD_DECISION_UNANIMOUS
+            if "majority" in supplemental:
+                return ENDING_METHOD_DECISION_MAJORITY
+            if (
+                "split" in supplemental
+                or "spilt" in supplemental
+                or "spit" in supplemental
+            ):
+                return ENDING_METHOD_DECISION_SPLIT
+            return ENDING_METHOD_DECISION_UNKNOWN
+        # Disqualification
+        if (
+            "illegal" in supplemental
+            or "disqualification" in supplemental
+            or "dq" in supplemental
+        ):
+            return ENDING_METHOD_DISQUALIFICATION
+        # KO/TKO
+        if (
+            "ko/tko" in supplemental
+            or "kick" in supplemental
+            or "punch" in supplemental
+            or "elbow" in supplemental
+            or "stoppage" in supplemental
+            or "cut" in supplemental
+            or "retirement" in supplemental
+            or "pound" in supplemental
+            or "strike" in supplemental
+            or "towel" in supplemental
+            or "slam" in supplemental
+            or "fist" in supplemental
+            or supplemental == "knee"
+        ):
+            return ENDING_METHOD_KO_TKO
+        # Submission
+        return ENDING_METHOD_SUBMISSION
+    # Draw
+    if status == STATUS_DRAW:
+        if "unanimous" in supplemental:
+            return ENDING_METHOD_DRAW_UNANIMOUS
+        if "majority" in supplemental:
+            return ENDING_METHOD_DRAW_MAJORITY
+        if "split" in supplemental or "spilt" in supplemental or "spit" in supplemental:
+            return ENDING_METHOD_DRAW_SPLIT
+        return ENDING_METHOD_DRAW_UNKNOWN
+    # No contest
+    if "accidental" in supplemental:
+        return ENDING_METHOD_NO_CONTEST_ACCIDENTAL
+    return ENDING_METHOD_NO_CONTEST_UNKNOWN

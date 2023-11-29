@@ -141,35 +141,8 @@ VALUES_STATUS_LOSS = ["loss"]
 VALUES_STATUS_CANCELLED = ["cancelled", "cancelled bout"]
 VALUES_STATUS_DRAW = ["draw"]
 VALUES_STATUS_UPCOMING = ["upcoming", "confirmed upcoming bout"]
-VALUES_STATUS_NO_CONTEST = ["no contest", "overturned to no contest"]
+VALUES_STATUS_NO_CONTEST = ["no contest", "overturned to no contest", "no_contest"]
 VALUES_STATUS_UNKNOWN = ["unknown"]
-
-
-# Decision types
-DECISION_TYPE_UNANIMOUS = "unanimous"
-DECISION_TYPE_SPLIT = "split"
-DECISION_TYPE_MAJORITY = "majority"
-DECISION_TYPE_TIMELIMIT = "timelimit"
-DECISION_TYPE_INJURY = "injury"
-DECISION_TYPE_TECHNICAL = "technical"
-DECISION_TYPE_POINTS = "points"
-DECISION_TYPE_UNKNOWN = "unknown"
-
-
-# No contest types
-NO_CONTEST_TYPE_ACCIDENTAL = "no_contest_accidental"
-NO_CONTEST_TYPE_UNKNOWN = "no_contest_unknown"
-
-
-# Draw types
-DRAW_TYPE_UNANIMOUS = "draw_unanimous"
-DRAW_TYPE_MAJORITY = "draw_majority"
-DRAW_TYPE_SPLIT = "draw_split"
-DRAW_TYPE_UNKNOWN = "draw_unknown"
-
-# Finish types
-FINISH_TYPE_KO_TKO = "ko/tko"
-FINISH_TYPE_SUBMISSION = "submission"
 
 
 # Ending Method
@@ -186,6 +159,7 @@ ENDING_METHOD_DRAW_SPLIT = "draw_split"
 ENDING_METHOD_DRAW_UNKNOWN = "draw_unknown"
 ENDING_METHOD_NO_CONTEST_ACCIDENTAL = "no_contest_accidental"
 ENDING_METHOD_NO_CONTEST_UNKNOWN = "no_contest_unknown"
+ENDING_METHOD_UNKNOWN = "unknown"
 
 
 # Division of the match
