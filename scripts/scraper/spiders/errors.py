@@ -13,6 +13,11 @@ class InvalidWeightClassValueError(Exception):
         super().__init__(f"invalid weight class value: {value}")
 
 
+class InvalidDateValueError(Exception):
+    def __init__(self, value: str) -> None:
+        super().__init__(f"invalid date value: {value}")
+
+
 class InvalidBillingValueError(Exception):
     def __init__(self, value: str) -> None:
         super().__init__(f"invalid billing value: {value}")
@@ -51,3 +56,8 @@ class InvalidOddsPatternError(Exception):
 class InvalidWeightSummaryPatternError(Exception):
     def __init__(self, pattern: str) -> None:
         super().__init__(f"invalid weight summary pattern: {pattern}")
+
+
+class InvalidRecordPatternError(Exception):
+    def __init__(self, pattern: str) -> None:
+        super().__init__(f"invalid record pattern: {pattern}")

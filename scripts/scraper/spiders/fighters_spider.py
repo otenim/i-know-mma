@@ -119,7 +119,7 @@ class FightersSpider(scrapy.Spider):
         if date_of_birth is not None:
             date_of_birth = normalize_text(date_of_birth)
             if date_of_birth not in VALUES_NOT_AVAILABLE:
-                ret["date_of_birth"] = parse_date(date_of_birth)
+                ret["date_of_birth"] = normalize_date(date_of_birth)
 
         # Weight class (optional)
         weight_class = profile_section.xpath(
@@ -278,7 +278,7 @@ class FightersSpider(scrapy.Spider):
                         "Unexpected page structure: could not identify the date of the match"
                     )
                     continue
-                date_normed = parse_date(date)
+                date_normed = normalize_date(date)
                 if date_normed is None:
                     self.logger.error(f"Unexpected format of date: {date}")
                     continue
@@ -563,6 +563,19 @@ def normalize_billing(billing: str) -> str:
     raise InvalidBillingValueError(billing)
 
 
+def normalize_date(date: str) -> str:
+    normed = normalize_text(date)
+    # 2014.09.09
+    matched = re.match(r"^(\d+)\.(\d+)\.(\d+)$", normed)
+    if matched is not None:
+        return f"{matched.group(1):04}-{matched.group(2):02}-{matched.group(3):02}"
+    # 2014-09-09
+    matched = re.match(r"^(\d+)\-(\d+)\-(\d+)$", normed)
+    if matched is not None:
+        f"{matched.group(1):04}-{matched.group(2):02}-{matched.group(3):02}"
+    raise InvalidDateValueError(date)
+
+
 def normalize_round_format(round_format: str) -> str:
     normed = normalize_text(round_format)
 
@@ -816,14 +829,14 @@ def parse_weight_summary(weight_summary: str) -> Dict[str, float]:
             pass
         else:
             ret["class"] = weight_class
-    for s in split[1:]:
+    for s in normed_split[1:]:
         # 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
         # Weigh-In 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
         matched = re.match(r"^(weigh-in )?([\d\.]+) (kgs?|lbs?)", s)
         if matched is None:
-            return None
+            raise InvalidWeightSummaryPatternError(weight_summary)
         if matched.group(2) is None or matched.group(3) is None:
-            return None
+            raise InvalidWeightSummaryPatternError(weight_summary)
         value, unit = float(matched.group(2)), matched.group(3)
         ret["limit" if matched.group(1) is None else "weigh_in"] = to_kg(
             value, unit=unit
@@ -834,20 +847,12 @@ def parse_weight_summary(weight_summary: str) -> Dict[str, float]:
         elif "weigh_in" in ret:
             ret["class"] = to_weight_class(ret["weigh_in"])
     if ret == {}:
-        return None
+        raise InvalidWeightSummaryPatternError(weight_summary)
     return ret
 
 
-def parse_date(txt: str) -> Union[str, None]:
-    normed = normalize_text(txt)
-    matched = re.match(r"^(\d+)\.(\d+)\.(\d+)$", normed)
-    if matched is not None:
-        return f"{matched.group(1):04}-{matched.group(2):02}-{matched.group(3):02}"
-    return None
-
-
-def parse_record(txt: str) -> Union[Dict[str, int], None]:
-    normed = normalize_text(txt)
+def parse_record(record: str) -> Dict[str, int]:
+    normed = normalize_text(record)
     matched = re.match(r"^(\d+)-(\d+)-(\d+)", normed)
     if matched is not None:
         return {
@@ -855,19 +860,19 @@ def parse_record(txt: str) -> Union[Dict[str, int], None]:
             "l": int(matched.group(2)),
             "d": int(matched.group(3)),
         }
-    return None
+    raise InvalidRecordPatternError(record)
 
 
-def calc_minutes(format: str) -> int:
+def calc_minutes(round_format: str) -> int:
     ans = 0
-    for s in format.split("-"):
+    for s in round_format.split("-"):
         if s != "ot":
             ans += int(s)
     return ans
 
 
-def calc_rounds(format: str) -> int:
-    return len(list(filter(lambda x: x != "ot", format.split("-"))))
+def calc_rounds(round_format: str) -> int:
+    return len(list(filter(lambda x: x != "ot", round_format.split("-"))))
 
 
 def calc_age(date: str, date_of_birth: str) -> float:
