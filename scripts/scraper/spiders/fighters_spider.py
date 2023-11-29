@@ -119,18 +119,20 @@ class FightersSpider(scrapy.Spider):
         if date_of_birth is not None:
             date_of_birth = normalize_text(date_of_birth)
             if date_of_birth not in VALUES_NOT_AVAILABLE:
-                ret["date_of_birth"] = normalize_date(date_of_birth)
+                try:
+                    ret["date_of_birth"] = normalize_date(date_of_birth)
+                except InvalidDateValueError as e:
+                    self.logger.error(e)
 
         # Weight class (optional)
         weight_class = profile_section.xpath(
             "./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text()"
         ).get()
         if weight_class is not None:
-            normed = normalize_weight_class(weight_class)
-            if normed is not None:
-                ret["weight_class"] = normed
-            else:
-                self.logger.error(f"Unexpected weight class: {weight_class}")
+            try:
+                ret["weight_class"] = normalize_weight_class(weight_class)
+            except InvalidWeightClassValueError as e:
+                self.logger.error(e)
 
         # Career disclosed earnings (optional)
         career_earnings = profile_section.xpath(
@@ -243,11 +245,11 @@ class FightersSpider(scrapy.Spider):
                         "Unexpected page structure: could not identify the sport of the match"
                     )
                     continue
-                normed_sport = normalize_sport(sport)
-                if normed_sport is None:
-                    self.logger.error(f"Unexpected sport value: {sport}")
+                try:
+                    item["sport"] = normalize_sport(sport)
+                except InvalidSportValueError as e:
+                    self.logger.error(e)
                     continue
-                item["sport"] = normed_sport
 
                 # Status of the match (must)
                 status = result_section.xpath("./@data-status").get()
@@ -256,18 +258,19 @@ class FightersSpider(scrapy.Spider):
                         "Unexpected page structure: could not identify the status of the match"
                     )
                     continue
-                normed_status = normalize_status(status)
-                if normed_status is None:
-                    self.logger.error(f"Unexpected status value: {status}")
+                try:
+                    item["status"] = normalize_status(status)
+                except InvalidStatusValueError as e:
+                    self.logger.error(e)
                     continue
-                # Ignore matches with status = cancelled, upcoming, unknown, no-contest
-                if normed_status in [
+
+                # Ignore matches with status = cancelled, upcoming, unknown
+                if item["status"] in [
                     STATUS_CANCELLED,
                     STATUS_UPCOMING,
                     STATUS_UNKNOWN,
                 ]:
                     continue
-                item["status"] = normed_status
 
                 # Date of the match (must)
                 date = result_section.xpath(
@@ -278,26 +281,31 @@ class FightersSpider(scrapy.Spider):
                         "Unexpected page structure: could not identify the date of the match"
                     )
                     continue
-                date_normed = normalize_date(date)
-                if date_normed is None:
-                    self.logger.error(f"Unexpected format of date: {date}")
+                try:
+                    item["date"] = normalize_date(date)
+                except InvalidDateValueError as e:
+                    self.logger.error(e)
                     continue
-                item["date"] = date_normed
 
-                # Age at the match (optional)
+                # Calc age at the match (optional)
                 if "date_of_birth" in ret:
                     item["age"] = calc_age(item["date"], ret["date_of_birth"])
 
                 # Opponent section (must)
                 opponent_section = result_section.xpath(
-                    "./div[@class='result']/div[@class='opponent']/div[@class='name']/a"
+                    "./div[@class='result']/div[@class='opponent']"
                 )
                 if len(opponent_section) == 0:
+                    self.logger.error(
+                        "Unexpected page structure: could not find opponent section"
+                    )
                     continue
                 item["opponent"] = {}
 
                 # Name & url of the opponent (must)
-                opponent_url = opponent_section.xpath("./@href").get()
+                opponent_url = opponent_section.xpath(
+                    "./div[@class='name']/a/@href"
+                ).get()
                 if opponent_url is None:
                     continue
                 item["opponent"] = get_id_from_url(opponent_url)
@@ -322,40 +330,38 @@ class FightersSpider(scrapy.Spider):
                                 item["promotion"] = get_id_from_url(promo_url)
 
                 # Details of the result (optional)
-                if normed_status in [
+                if item["status"] in [
                     STATUS_WIN,
                     STATUS_LOSS,
                     STATUS_DRAW,
                     STATUS_NO_CONTEST,
                 ]:
-                    # Parse summary of the result
-                    summary_section = result_section.xpath(
+                    # Summary of the match (must)
+                    match_summary_section = result_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='lead']"
                     )
-                    if len(summary_section) == 0:
+                    if len(match_summary_section) == 0:
                         self.logger.error(
                             "Unexpected page structure: could not find summary section"
                         )
-                    else:
-                        txt = summary_section.xpath(
-                            "./a/text()[normalize-space()]"
+                        continue
+                    match_summary = match_summary_section.xpath(
+                        "./a/text()[normalize-space()]"
+                    ).get()
+                    if match_summary is None:
+                        # No link
+                        match_summary = match_summary_section.xpath(
+                            "./text()[normalize-space()]"
                         ).get()
-                        if txt is None:
-                            txt = summary_section.xpath(
-                                "./text()[normalize-space()]"
-                            ).get()
-                        if txt is None:
-                            self.logger.error(
-                                "Unexpected page structure: could not find summary text"
-                            )
-                        else:
-                            parsed = parse_match_summary(txt)
-                            if parsed is None:
-                                self.logger.error(
-                                    f"Unexpected format of summary: {txt}"
-                                )
-                            else:
-                                item["summary"] = parsed
+                    if match_summary is None:
+                        self.logger.error(
+                            "Unexpected page structure: could not find match summary text"
+                        )
+                        continue
+                    try:
+                        item["summary"] = parse_match_summary(match_summary)
+                    except InvalidMatchSummaryPatternError as e:
+                        self.logger.error(e)
 
                     # More info (optional)
                     label_sections = result_section.xpath(
@@ -367,34 +373,29 @@ class FightersSpider(scrapy.Spider):
                             continue
                         label = normalize_text(label)
                         if label == "billing:":
-                            # Billing
-                            # e.g "main event", "co-main event", "prelim", etc.
+                            # Billing of the match
                             billing = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
                             ).get()
                             if billing is not None:
-                                normed = normalize_billing(billing)
-                                if normed is not None:
-                                    item["billing"] = normed
-                                else:
-                                    self.logger.error(
-                                        f"Unexpected value of billing: {billing}"
-                                    )
+                                try:
+                                    item["billing"] = normalize_billing(billing)
+                                except InvalidBillingValueError as e:
+                                    self.logger.error(e)
                         elif label == "duration:":
-                            # Format of the duration
-                            txt = label_section.xpath(
+                            # Round format of the match
+                            round_format = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
                             ).get()
-                            if txt is not None:
-                                format = normalize_round_format(txt)
-                                if format is not None:
-                                    item["format"] = format
-                                else:
-                                    self.logger.error(
-                                        f"Unexpected format of duration: {txt}"
+                            if round_format is not None:
+                                try:
+                                    item["round_format"] = normalize_round_format(
+                                        round_format
                                     )
+                                except InvalidRoundFormatValueError as e:
+                                    self.logger.error(e)
                         elif label == "referee:":
-                            # Name of the referee
+                            # Referee of the match
                             referee = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
                             ).get()
@@ -423,18 +424,15 @@ class FightersSpider(scrapy.Spider):
                                 except InvalidOddsPatternError as e:
                                     self.logger.error(e)
                         elif label == "title bout:":
-                            # Title info
-                            txt = label_section.xpath(
+                            # Title infomation
+                            title_info = label_section.xpath(
                                 "./following-sibling::span[1]/text()"
                             ).get()
-                            if txt is not None:
-                                title_info = parse_title_info(txt)
-                                if title_info is not None:
-                                    item["title_info"] = title_info
-                                else:
-                                    self.logger.error(
-                                        f"Unexpected format of title info: {txt}"
-                                    )
+                            if title_info is not None:
+                                try:
+                                    item["title_info"] = parse_title_info(title_info)
+                                except InvalidTitleInfoPatternError as e:
+                                    self.logger.error(e)
                 ret["results"].append(item)
 
             # Ignore fighters with no match results
