@@ -750,12 +750,20 @@ def parse_match_summary(match_summary: str) -> Dict:
                     "method": infer_method(matched.group(2)),
                     "by": matched.group(2),
                 }
-            # Draw · Unanimous
-            if normed == "draw · unanimous":
+            # Draw · Unanimous|Majority|Split
+            matched = re.match(r"^draw · (unanimous|majority|split)$", normed)
+            if matched is not None:
                 return {
                     "status": STATUS_DRAW,
                     "method": METHOD_DECISION,
-                    "by": DECISION_TYPE_UNANIMOUS,
+                    "by": matched.group(1),
+                }
+            # Draw · Kimura
+            matched = re.match(r"^draw · (.+)$", normed)
+            if matched is not None:
+                return {
+                    "status": STATUS_DRAW,
+                    "method": METHOD_DECISION,
                 }
             # No Contest · R3
             matched = re.match(r"^no contest · (r\d+)$", normed)
