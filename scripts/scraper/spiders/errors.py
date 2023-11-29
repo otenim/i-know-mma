@@ -31,3 +31,23 @@ class InvalidRoundTimePatternError(Exception):
 class InvalidRoundPatternError(Exception):
     def __init__(self, pattern: str) -> None:
         super().__init__(f"invalid round pattern: {pattern}")
+
+
+class InvalidMatchSummaryPatternError(Exception):
+    def __init__(self, pattern: str) -> None:
+        super().__init__(f"invalid match summary pattern: {pattern}")
+
+
+class InvalidTitleInfoPatternError(Exception):
+    def __init__(self, pattern: str) -> None:
+        super().__init__(f"invalid title info pattern: {pattern}")
+
+
+class InvalidOddsPatternError(Exception):
+    def __init__(self, pattern: str) -> None:
+        super().__init__(f"invalid odds pattern: {pattern}")
+
+
+class InvalidWeightSummaryPatternError(Exception):
+    def __init__(self, pattern: str) -> None:
+        super().__init__(f"invalid weight summary pattern: {pattern}")
