@@ -156,16 +156,36 @@ DECISION_TYPE_POINTS = "points"
 DECISION_TYPE_UNKNOWN = "unknown"
 
 
-# Ended by
-ENDED_BY_KO_TKO = "ko/tko"
-ENDED_BY_SUBMISSION = "submission"
-ENDED_BY_DECISION = "decision"
+# No contest types
+NO_CONTEST_TYPE_ACCIDENTAL = "no_contest_accidental"
+NO_CONTEST_TYPE_UNKNOWN = "no_contest_unknown"
 
 
-# Methods
-METHOD_KO_TKO = "ko/tko"
-METHOD_SUBMISSION = "submission"
-METHOD_DECISION = "decision"
+# Draw types
+DRAW_TYPE_UNANIMOUS = "draw_unanimous"
+DRAW_TYPE_MAJORITY = "draw_majority"
+DRAW_TYPE_SPLIT = "draw_split"
+DRAW_TYPE_UNKNOWN = "draw_unknown"
+
+# Finish types
+FINISH_TYPE_KO_TKO = "ko/tko"
+FINISH_TYPE_SUBMISSION = "submission"
+
+
+# Ending Method
+ENDING_METHOD_KO_TKO = "ko/tko"
+ENDING_METHOD_SUBMISSION = "submission"
+ENDING_METHOD_DISQUALIFICATION = "disqualification"
+ENDING_METHOD_DECISION_UNANIMOUS = "decision_unanimous"
+ENDING_METHOD_DECISION_MAJORITY = "decision_majority"
+ENDING_METHOD_DECISION_SPLIT = "decision_split"
+ENDING_METHOD_DECISION_UNKNOWN = "decision_unknown"
+ENDING_METHOD_DRAW_UNANIMOUS = "draw_unanimous"
+ENDING_METHOD_DRAW_MAJORITY = "draw_majority"
+ENDING_METHOD_DRAW_SPLIT = "draw_split"
+ENDING_METHOD_DRAW_UNKNOWN = "draw_unknown"
+ENDING_METHOD_NO_CONTEST_ACCIDENTAL = "no_contest_accidental"
+ENDING_METHOD_NO_CONTEST_UNKNOWN = "no_contest_unknown"
 
 
 # Division of the match

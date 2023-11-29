@@ -668,12 +668,37 @@ def parse_match_summary(match_summary: str) -> Dict:
                 r"^(win|loss|no contest) · ([^·]+) · (\d+:\d+) · (r\d+)$", normed
             )
             if matched is not None:
+                status = normalize_status(matched.group(1))
+                time = parse_round_time(matched.group(3))
+                round = parse_round(matched.group(4))
+                finisher = matched.group(2)
+                if status in [STATUS_WIN, STATUS_LOSS]:
+                    if finisher == "decision":
+                        return {
+                            "status": status,
+                            "time": time,
+                            "round": round,
+                            "method": ENDING_METHOD_DECISION_UNKNOWN,
+                        }
+                    finish_type = infer_finish_type(finisher)
+                    return {
+                        "status": status,
+                        "time": time,
+                        "round": round,
+                        "method": ENDING_METHOD_KO_TKO
+                        if finish_type == FINISH_TYPE_KO_TKO
+                        else ENDING_METHOD_SUBMISSION,
+                        "finisher": finisher,
+                    }
+                # status == STATUS_NO_CONTEST
+                no_contest_type = infer_no_contest_type(finisher)
                 return {
-                    "status": normalize_status(matched.group(1)),
-                    "time": parse_round_time(matched.group(3)),
-                    "round": parse_round(matched.group(4)),
-                    "method": infer_method(matched.group(2)),
-                    "by": matched.group(2),
+                    "status": status,
+                    "time": time,
+                    "round": round,
+                    "method": ENDING_METHOD_NO_CONTEST_ACCIDENTAL
+                    if no_contest_type == NO_CONTEST_TYPE_ACCIDENTAL
+                    else ENDING_METHOD_NO_CONTEST_UNKNOWN,
                 }
             # Draw · Accidental Thumb to Amoussou's Eye · 4:14 · R1
             # Draw · Draw · 5:00 · R2
@@ -684,8 +709,6 @@ def parse_match_summary(match_summary: str) -> Dict:
                     "status": STATUS_DRAW,
                     "time": parse_round_time(matched.group(2)),
                     "round": parse_round(matched.group(3)),
-                    "method": METHOD_DECISION,
-                    "by": infer_decision_type(matched.group(1)),
                 }
         elif n == 3:
             # Win|Loss|Draw · Decision · Unanimous|Majority|Split
@@ -705,7 +728,7 @@ def parse_match_summary(match_summary: str) -> Dict:
                 return {
                     "status": normalize_status(matched.group(1)),
                     "round": parse_round(matched.group(3)),
-                    "method": infer_method(matched.group(2)),
+                    "method": infer_ending_method(matched.group(2)),
                     "by": matched.group(2),
                 }
             # Draw · Washington Elbowed in Back of Head · R1
@@ -747,7 +770,7 @@ def parse_match_summary(match_summary: str) -> Dict:
             if matched is not None:
                 return {
                     "status": normalize_status(matched.group(1)),
-                    "method": infer_method(matched.group(2)),
+                    "method": infer_ending_method(matched.group(2)),
                     "by": matched.group(2),
                 }
             # Draw · Unanimous|Majority|Split
@@ -983,10 +1006,8 @@ def get_id_from_url(url: str) -> str:
     return url.split("/")[-1]
 
 
-def infer_method(by: str) -> str:
-    normed = normalize_text(by)
-    if normed == "decision":
-        return METHOD_DECISION
+def infer_finish_type(supplemental: str) -> str:
+    normed = normalize_text(supplemental)
     if (
         normed == "ko/tko"
         or normed == "knee"
@@ -1002,12 +1023,24 @@ def infer_method(by: str) -> str:
         or "slam" in normed
         or "fist" in normed
     ):
-        return METHOD_KO_TKO
-    return METHOD_SUBMISSION
+        return FINISH_TYPE_KO_TKO
+    return FINISH_TYPE_SUBMISSION
 
 
-def infer_decision_type(decision: str) -> str:
-    normed = normalize_text(decision)
+def infer_no_contest_type(supplemental: str) -> str:
+    normed = normalize_text(supplemental)
+    if "accidental" in normed:
+        return NO_CONTEST_TYPE_ACCIDENTAL
+    return NO_CONTEST_TYPE_UNKNOWN
+
+
+def infer_draw_type(supplemental: str) -> str:
+    normed = normalize_text(supplemental)
+    pass
+
+
+def infer_decision_type(supplemental: str) -> str:
+    normed = normalize_text(supplemental)
     if "unanimous" in normed:
         return DECISION_TYPE_UNANIMOUS
     if "majority" in normed:
