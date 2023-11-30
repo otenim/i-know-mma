@@ -163,6 +163,13 @@ ENDING_METHOD_OVERTURNED = "overturned"
 ENDING_METHOD_UNKNOWN = "unknown"
 
 
+# Round Format Types
+ROUND_FORMAT_TYPE_NORMAL = "normal"
+ROUND_FORMAT_TYPE_UNLIM_ROUNDS = "unlim_rounds"
+ROUND_FORMAT_TYPE_UNLIM_ROUND_TIME = "unlim_round_time"
+ROUND_FORMAT_TYPE_ROUND_TIME_UNKNONW = "round_time_unknown"
+
+
 # Division of the match
 DIVISION_PRO = "pro"
 DIVISION_AM = "am"

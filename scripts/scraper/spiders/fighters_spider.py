@@ -850,16 +850,49 @@ def parse_record(record: str) -> Dict[str, int]:
     raise InvalidRecordPatternError(record)
 
 
-def calc_minutes(round_format: str) -> int:
-    ans = 0
-    for s in round_format.split("-"):
-        if s != "ot":
-            ans += int(s)
-    return ans
+def parse_round_format(round_format: str) -> Dict:
+    # 4-4-4
+    # 4
+    # 4-4-4-ot
+    # 4-ot
+    matched = re.match(r"^(\d+(?:\-(?:\d+|ot))*)$", round_format)
+    if matched is not None:
+        round_minutes = []
+        ot = False
+        for s in round_format.split("-"):
+            if s == "ot":
+                ot = True
+            else:
+                round_minutes.append(int(s))
+        ret = {
+            "type": ROUND_FORMAT_TYPE_NORMAL,
+            "ot": ot,
+            "rounds": len(round_minutes),
+            "minutes": sum(round_minutes),
+            "round_minutes": round_minutes,
+            "ot_minutes": round_minutes[-1] if ot else 0,
+        }
+        return ret
 
+    # 4-*
+    matched = re.match(r"^(\d+\-\*)$", round_format)
+    if matched is not None:
+        m = int(round_format.split("-")[0])
+        return {"type": ROUND_FORMAT_TYPE_UNLIM_ROUNDS, "minutes_per_round": m}
 
-def calc_rounds(round_format: str) -> int:
-    return len(list(filter(lambda x: x != "ot", round_format.split("-"))))
+    # *
+    if round_format == "*":
+        return {"type": ROUND_FORMAT_TYPE_UNLIM_ROUND_TIME, "rounds": 1}
+
+    # ?
+    # ?-?-?
+    matched = re.match(r"^(\?(?:\-\?)*)$", round_format)
+    if matched is not None:
+        return {
+            "type": ROUND_FORMAT_TYPE_ROUND_TIME_UNKNONW,
+            "rounds": len(round_format.split("-")),
+        }
+    raise InvalidRoundFormatPatternError(round_format)
 
 
 def calc_age(date: str, date_of_birth: str) -> float:
