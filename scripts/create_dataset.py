@@ -3,7 +3,6 @@ import click
 import json
 import numpy as np
 from scraper.spiders.constants import *
-from scraper.spiders.fighters_spider import infer, calc_minutes, calc_rounds
 from typing import Union
 
 
@@ -19,31 +18,23 @@ def main(jsonfile: str):
 
     # Load dataframe of fighter data
     df_fighters = pd.json_normalize(jsondata).drop(["results"], axis="columns")
-    df_fighters.info(verbose=True, show_counts=True)
 
     # Load dataframe of result data
     df_results = pd.json_normalize(jsondata, record_path="results", meta=["id"])
-    df_results.info(verbose=True, show_counts=True)
 
     # Merge fighters & results
     df = (
         pd.merge(df_fighters, df_results, on="id")
         .drop(
             [
-                "url",
                 "name",
-                "nickname",
                 "born",
                 "out_of",
-                "affiliation.url",
-                "affiliation.name",
-                "promotion.url",
-                "opponent.name",
-                "opponent.url",
+                "nickname",
                 "foundation_styles",
-                "odds",
-                "title_info.as",
                 "title_info.for",
+                "title_info.as",
+                "odds",
             ],
             axis="columns",
         )
@@ -53,48 +44,37 @@ def main(jsonfile: str):
                 "nationality": "string",
                 "weight_class": "string",
                 "career_earnings": "float32",
+                "affiliation": "string",
                 "height": "float32",
                 "reach": "float32",
-                "affiliation.id": "string",
                 "head_coach": "string",
                 "college": "string",
                 "division": "string",
                 "sport": "string",
                 "status": "string",
-                "age": "float32",
+                "opponent": "string",
+                "promotion": "string",
+                "method": "string",
+                "supplemental": "string",
                 "billing": "string",
+                "round_format": "string",
                 "referee": "string",
-                "promotion.id": "string",
-                "ended_by.type": "string",
-                "ended_by.detail": "string",
-                "ended_at.round": "float32",
-                "ended_at.time.m": "float32",
-                "ended_at.time.s": "float32",
-                "ended_at.elapsed.m": "float32",
-                "ended_at.elapsed.s": "float32",
-                "regulation.format": "string",
-                "regulation.minutes": "float32",
-                "regulation.rounds": "float32",
+                "record.w": "float32",
+                "record.l": "float32",
+                "record.d": "float32",
+                "round": "float32",
+                "time.m": "float32",
+                "time.s": "float32",
+                "age": "float32",
                 "weight.class": "string",
                 "weight.limit": "float32",
                 "weight.weigh_in": "float32",
-                "opponent.id": "string",
             }
         )
     )
     df["date_of_birth"] = pd.to_datetime(df["date_of_birth"], format="%Y-%m-%d")
     df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
-    df["ended_at.time"] = df["ended_at.time.m"] + df["ended_at.time.s"] / 60
-    df["ended_at.elapsed"] = df["ended_at.elapsed.m"] + df["ended_at.elapsed.s"] / 60
-    df = df.drop(
-        [
-            "ended_at.time.m",
-            "ended_at.time.s",
-            "ended_at.elapsed.m",
-            "ended_at.elapsed.s",
-        ],
-        axis="columns",
-    )
+    df.info(verbose=True)
 
     # Correct dataset
     df = correct(df)
@@ -108,10 +88,10 @@ def main(jsonfile: str):
         "nationality",
         "head_coach",
         "college",
-        "affiliation.id",
+        "affiliation",
         "referee",
         "billing",
-        "promotion.id",
+        "promotion",
     ]:
         df[c].fillna("n/a", inplace=True)
 
@@ -119,22 +99,17 @@ def main(jsonfile: str):
     df = fill_date_of_birth(df)
 
     # Fill age
-    df["age"].fillna(
-        ((df["date"] - df["date_of_birth"]).dt.days / 365.25).astype("float32"),
-        inplace=True,
-    )
+    df = fill_age(df)
 
-    # Fill weight_class
+    # Fill round_format
+    df = fill_round_format(df)
 
-    # Fill ended_by
-    df = fill_ended_by(df)
+    # # Fill ended_by
+    # df = fill_ended_by(df)
 
-    # Fill regulation
-    df = fill_regulation(df)
-
-    # Fill ended_at
-    df = fill_ended_at(df)
-    df.info(show_counts=True, verbose=True)
+    # # Fill ended_at
+    # df = fill_ended_at(df)
+    df.info(verbose=True)
 
 
 def correct(df: pd.DataFrame) -> pd.DataFrame:
@@ -142,7 +117,7 @@ def correct(df: pd.DataFrame) -> pd.DataFrame:
         df["date"] == pd.to_datetime("2019-10-17", format="%Y-%m-%d")
     )
     if mask.sum() == 1:
-        df.loc[mask, "regulation.format"] = "15"
+        df.loc[mask, "round_format"] = "15"
     return df
 
 
@@ -191,7 +166,15 @@ def fill_date_of_birth(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def fill_ended_by(df: pd.DataFrame) -> pd.DataFrame:
+def fill_age(df: pd.DataFrame) -> pd.DataFrame:
+    df["age"].fillna(
+        ((df["date"] - df["date_of_birth"]).dt.days / 365.25).astype("float32"),
+        inplace=True,
+    )
+    return df
+
+
+def fill_ending_method(df: pd.DataFrame) -> pd.DataFrame:
     df["ended_by.detail"] = df.groupby("id")["ended_by.detail"].transform(
         lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
     )
@@ -209,45 +192,29 @@ def fill_ended_by(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def fill_regulation(df: pd.DataFrame) -> pd.DataFrame:
-    # Fill format
-    df["regulation.format"] = df.groupby(["sport", "division"])[
-        "regulation.format"
-    ].transform(lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0]))
-    if count_nan(df["regulation.format"]) > 0:
-        df["regulation.format"] = df.groupby("sport")["regulation.format"].transform(
-            lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
-        )
-        if count_nan(df["regulation.format"]) > 0:
-            df["regulation.format"].fillna(
-                df["regulation.format"].mode().iat[0], inplace=True
-            )
-
-    # Fill rounds
-    df["regulation.rounds"].fillna(
-        df["regulation.format"]
-        .apply(lambda x: x if x is np.nan else 1.0 if x == "*" else calc_rounds(x))
-        .astype(df["regulation.rounds"].dtype),
-        inplace=True,
+def fill_round_format(df: pd.DataFrame) -> pd.DataFrame:
+    df["round_format"] = df.groupby(["promotion"])["round_format"].transform(
+        lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
     )
-    if count_nan(df["regulation.rounds"]) > 0:
-        df["regulation.rounds"].fillna(df["ended_at.round"], inplace=True)
-
-    # Fill minutes
-    df["regulation.minutes"].fillna(
-        df["regulation.format"]
-        .apply(lambda x: x if x is np.nan else np.nan if "*" in x else calc_minutes(x))
-        .astype(df["regulation.minutes"].dtype),
-        inplace=True,
-    )
-    if count_nan(df["regulation.minutes"]) > 0:
-        df["regulation.minutes"].fillna(df["ended_at.elapsed"], inplace=True)
-        if count_nan(df["regulation.minutes"]) > 0:
-            mask = df["regulation.format"] == "*"
-            masked = df.loc[mask, "regulation.minutes"]
-            df.loc[mask, "regulation.minutes"] = masked.fillna(
-                masked.mean(),
-            )
+    if count_nan(df["round_format"]) > 0:
+        df["round_format"] = df.groupby(["sport", "division"])[
+            "round_format"
+        ].transform(lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0]))
+    # # Fill minutes
+    # df["regulation.minutes"].fillna(
+    #     df["round_format"]
+    #     .apply(lambda x: x if x is np.nan else np.nan if "*" in x else calc_minutes(x))
+    #     .astype(df["regulation.minutes"].dtype),
+    #     inplace=True,
+    # )
+    # if count_nan(df["regulation.minutes"]) > 0:
+    #     df["regulation.minutes"].fillna(df["ended_at.elapsed"], inplace=True)
+    #     if count_nan(df["regulation.minutes"]) > 0:
+    #         mask = df["round_format"] == "*"
+    #         masked = df.loc[mask, "regulation.minutes"]
+    #         df.loc[mask, "regulation.minutes"] = masked.fillna(
+    #             masked.mean(),
+    #         )
     return df
 
 
