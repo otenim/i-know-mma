@@ -159,6 +159,7 @@ ENDING_METHOD_DRAW_SPLIT = "draw_split"
 ENDING_METHOD_DRAW_UNKNOWN = "draw_unknown"
 ENDING_METHOD_NO_CONTEST_ACCIDENTAL = "no_contest_accidental"
 ENDING_METHOD_NO_CONTEST_UNKNOWN = "no_contest_unknown"
+ENDING_METHOD_OVERTURNED = "overturned"
 ENDING_METHOD_UNKNOWN = "unknown"
 
 

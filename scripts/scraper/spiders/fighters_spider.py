@@ -2,7 +2,7 @@ import scrapy
 import re
 import datetime
 from scrapy.http import TextResponse
-from typing import List, Union, Dict
+from typing import Union, Dict, Optional
 from .constants import *
 from .errors import *
 
@@ -664,7 +664,7 @@ def parse_match_summary(match_summary: str) -> Dict:
     try:
         status = normalize_status(normed_split[0])
     except InvalidStatusValueError as e:
-        raise InvalidMatchSummaryPatternError(match_summary)
+        return {"method": infer_ending_method(normed_split[0])}
     normed = " · ".join(normed_split)
     n = len(normed_split)
     try:
@@ -683,7 +683,7 @@ def parse_match_summary(match_summary: str) -> Dict:
                     "status": status,
                     "time": parse_round_time(matched.group(3)),
                     "round": parse_round(matched.group(4)),
-                    "method": infer_ending_method(status, supplemental),
+                    "method": infer_ending_method(supplemental, status),
                     "supplemental": supplemental,
                 }
         elif n == 3:
@@ -696,7 +696,7 @@ def parse_match_summary(match_summary: str) -> Dict:
                 supplemental = matched.group(2)
                 return {
                     "status": status,
-                    "method": infer_ending_method(status, supplemental),
+                    "method": infer_ending_method(supplemental, status),
                     "supplemental": supplemental,
                 }
             # Win|Loss · Flying Knee & Punches · R1
@@ -710,7 +710,7 @@ def parse_match_summary(match_summary: str) -> Dict:
                 return {
                     "status": status,
                     "round": parse_round(matched.group(3)),
-                    "method": infer_ending_method(status, supplemental),
+                    "method": infer_ending_method(supplemental, status),
                     "supplemental": supplemental,
                 }
             # No Contest · 3:15 · R1
@@ -732,7 +732,7 @@ def parse_match_summary(match_summary: str) -> Dict:
                 supplemental = matched.group(2)
                 return {
                     "status": status,
-                    "method": infer_ending_method(status, supplemental),
+                    "method": infer_ending_method(supplemental, status),
                     "supplemental": supplemental,
                 }
             # No Contest · R3
@@ -957,64 +957,73 @@ def get_id_from_url(url: str) -> str:
     return url.split("/")[-1]
 
 
-def infer_ending_method(status: str, supplemental: str) -> str:
-    status = normalize_status(status)
+def infer_ending_method(supplemental: str, status: Optional[str] = None) -> str:
     supplemental = normalize_text(supplemental)
-    if status not in [STATUS_WIN, STATUS_LOSS, STATUS_DRAW, STATUS_NO_CONTEST]:
-        raise ValueError(
-            f"unexpected status: {status} (one of {STATUS_WIN}, {STATUS_LOSS}, {STATUS_DRAW} or {STATUS_NO_CONTEST} is expected)"
-        )
-    # Win|Loss
-    if status in [STATUS_WIN, STATUS_LOSS]:
-        # Decision
-        if "decision" in supplemental:
+    if status is None:
+        # Result Overturned
+        if "overturned" in supplemental:
+            return ENDING_METHOD_OVERTURNED
+    else:
+        status = normalize_status(status)
+        if status not in [STATUS_WIN, STATUS_LOSS, STATUS_DRAW, STATUS_NO_CONTEST]:
+            raise ValueError(
+                f"unexpected status: {status} (one of {STATUS_WIN}, {STATUS_LOSS}, {STATUS_DRAW} or {STATUS_NO_CONTEST} is expected)"
+            )
+        # Win|Loss
+        if status in [STATUS_WIN, STATUS_LOSS]:
+            # Decision
+            if "decision" in supplemental:
+                if "unanimous" in supplemental:
+                    return ENDING_METHOD_DECISION_UNANIMOUS
+                if "majority" in supplemental:
+                    return ENDING_METHOD_DECISION_MAJORITY
+                if (
+                    "split" in supplemental
+                    or "spilt" in supplemental
+                    or "spit" in supplemental
+                ):
+                    return ENDING_METHOD_DECISION_SPLIT
+                return ENDING_METHOD_DECISION_UNKNOWN
+            # Disqualification
+            if (
+                "illegal" in supplemental
+                or "disqualification" in supplemental
+                or "dq" in supplemental
+            ):
+                return ENDING_METHOD_DISQUALIFICATION
+            # KO/TKO
+            if (
+                "ko/tko" in supplemental
+                or "kick" in supplemental
+                or "punch" in supplemental
+                or "elbow" in supplemental
+                or "stoppage" in supplemental
+                or "cut" in supplemental
+                or "retirement" in supplemental
+                or "pound" in supplemental
+                or "strike" in supplemental
+                or "towel" in supplemental
+                or "slam" in supplemental
+                or "fist" in supplemental
+                or supplemental == "knee"
+            ):
+                return ENDING_METHOD_KO_TKO
+            # Submission
+            return ENDING_METHOD_SUBMISSION
+        # Draw
+        if status == STATUS_DRAW:
             if "unanimous" in supplemental:
-                return ENDING_METHOD_DECISION_UNANIMOUS
+                return ENDING_METHOD_DRAW_UNANIMOUS
             if "majority" in supplemental:
-                return ENDING_METHOD_DECISION_MAJORITY
+                return ENDING_METHOD_DRAW_MAJORITY
             if (
                 "split" in supplemental
                 or "spilt" in supplemental
                 or "spit" in supplemental
             ):
-                return ENDING_METHOD_DECISION_SPLIT
-            return ENDING_METHOD_DECISION_UNKNOWN
-        # Disqualification
-        if (
-            "illegal" in supplemental
-            or "disqualification" in supplemental
-            or "dq" in supplemental
-        ):
-            return ENDING_METHOD_DISQUALIFICATION
-        # KO/TKO
-        if (
-            "ko/tko" in supplemental
-            or "kick" in supplemental
-            or "punch" in supplemental
-            or "elbow" in supplemental
-            or "stoppage" in supplemental
-            or "cut" in supplemental
-            or "retirement" in supplemental
-            or "pound" in supplemental
-            or "strike" in supplemental
-            or "towel" in supplemental
-            or "slam" in supplemental
-            or "fist" in supplemental
-            or supplemental == "knee"
-        ):
-            return ENDING_METHOD_KO_TKO
-        # Submission
-        return ENDING_METHOD_SUBMISSION
-    # Draw
-    if status == STATUS_DRAW:
-        if "unanimous" in supplemental:
-            return ENDING_METHOD_DRAW_UNANIMOUS
-        if "majority" in supplemental:
-            return ENDING_METHOD_DRAW_MAJORITY
-        if "split" in supplemental or "spilt" in supplemental or "spit" in supplemental:
-            return ENDING_METHOD_DRAW_SPLIT
-        return ENDING_METHOD_DRAW_UNKNOWN
-    # No contest
-    if "accidental" in supplemental:
-        return ENDING_METHOD_NO_CONTEST_ACCIDENTAL
+                return ENDING_METHOD_DRAW_SPLIT
+            return ENDING_METHOD_DRAW_UNKNOWN
+        # No contest
+        if "accidental" in supplemental:
+            return ENDING_METHOD_NO_CONTEST_ACCIDENTAL
     return ENDING_METHOD_NO_CONTEST_UNKNOWN
