@@ -228,6 +228,9 @@ def fill_round(df: pd.DataFrame) -> pd.DataFrame:
         ]
     )
     df.loc[mask, "round"] = df.loc[mask, "round"].fillna(df.loc[mask, "rounds"])
+
+    mask = df["round_format"] == ROUND_FORMAT_TYPE_UNLIM_ROUND_TIME
+    df.loc[mask, "round"] = df.loc[mask, "round"].fillna(1)
     return df
 
 
