@@ -117,8 +117,8 @@ def main(jsonfile: str):
     # Fill round
     df = fill_round(df)
 
-    # Create series "elapsed"
-    df = create_elapsed(df)
+    # Create series "progress"
+    df = create_progress(df)
     click.echo("> Processed")
     df.info(verbose=True)
 
@@ -247,7 +247,7 @@ def fill_minutes(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def create_elapsed(df: pd.DataFrame) -> pd.DataFrame:
+def create_progress(df: pd.DataFrame) -> pd.DataFrame:
     def helper(row):
         if row.isnull().any():
             return np.nan
@@ -271,11 +271,12 @@ def create_elapsed(df: pd.DataFrame) -> pd.DataFrame:
             return np.nan
         raise ValueError(f"unexpected round format type: {type_}")
 
-    df["elapsed"] = (
+    elapsed = (
         df[["time.m", "time.s", "round", "round_format"]]
         .apply(helper, axis=1)
         .astype("float32")
     )
+    df["progress"] = elapsed / df["minutes"]
     return df
 
 
