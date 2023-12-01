@@ -114,6 +114,9 @@ def main(jsonfile: str):
     df = create_minutes(df)
     df = fill_minutes(df)
 
+    # Fill round
+    df = fill_round(df)
+
     # Create series "elapsed"
     df = create_elapsed(df)
     click.echo("> Processed")
@@ -211,38 +214,20 @@ def fill_round_format(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def fill_ended_at(df: pd.DataFrame) -> pd.DataFrame:
-    # Fill elapsed time bouts ended by decision
-    mask = df["ended_by.type"] == ENDED_BY_DECISION
-    df.loc[mask, "ended_at.elapsed"] = df.loc[mask, "ended_at.elapsed"].fillna(
-        df.loc[mask, "regulation.minutes"]
+def fill_round(df: pd.DataFrame) -> pd.DataFrame:
+    mask = df["method"].isin(
+        [
+            ENDING_METHOD_DECISION_UNANIMOUS,
+            ENDING_METHOD_DECISION_MAJORITY,
+            ENDING_METHOD_DECISION_SPLIT,
+            ENDING_METHOD_DECISION_UNKNOWN,
+            ENDING_METHOD_DRAW_UNANIMOUS,
+            ENDING_METHOD_DRAW_MAJORITY,
+            ENDING_METHOD_DRAW_SPLIT,
+            ENDING_METHOD_DRAW_UNKNOWN,
+        ]
     )
-
-    # Progress
-    df["ended_at.progress"] = df["ended_at.elapsed"] / df["regulation.minutes"]
-    df["ended_at.progress"] = df.groupby("id")["ended_at.progress"].transform(
-        lambda x: x.fillna(x.mean())
-    )
-    if count_nan(df["ended_at.progress"]) > 0:
-        df["ended_at.progress"] = df.groupby("weight_class")[
-            "ended_at.progress"
-        ].transform(lambda x: x.fillna(x.mean()))
-        if count_nan(df["ended_at.progress"]) > 0:
-            df["ended_at.progress"].fillna(df["ended_at.progress"].mean(), inplace=True)
-
-    # Fill round
-    df["ended_at.round"].fillna(
-        np.ceil(df["regulation.rounds"] * df["ended_at.progress"]), inplace=True
-    )
-
-    # Fill elapsed
-    df["ended_at.elapsed"].fillna(
-        df["regulation.minutes"] * df["ended_at.progress"], inplace=True
-    )
-
-    # Fill time
-
-    df = df.drop(["ended_at.progress"], axis="columns")
+    df.loc[mask, "round"] = df.loc[mask, "round"].fillna(df.loc[mask, "rounds"])
     return df
 
 
@@ -253,7 +238,9 @@ def fill_rounds(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fill_minutes(df: pd.DataFrame) -> pd.DataFrame:
-    # mask = np.logical_and(np.logical_not(df[""]))
+    time = df["time.m"] + df["time.s"] / 60
+    mask = np.logical_and(np.logical_not(time.isnull()), df["minutes"].isnull())
+    df.loc[mask, "minutes"] = time[mask]
     return df
 
 
