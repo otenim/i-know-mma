@@ -3,6 +3,7 @@ import click
 import json
 import numpy as np
 from scraper.spiders.constants import *
+from scraper.spiders.fighters_spider import parse_round_format
 from typing import Union
 
 
@@ -74,6 +75,7 @@ def main(jsonfile: str):
     )
     df["date_of_birth"] = pd.to_datetime(df["date_of_birth"], format="%Y-%m-%d")
     df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
+    click.echo("> Plain")
     df.info(verbose=True)
 
     # Correct dataset
@@ -104,11 +106,17 @@ def main(jsonfile: str):
     # Fill round_format
     df = fill_round_format(df)
 
-    # # Fill ended_by
-    # df = fill_ended_by(df)
+    # Create series "rounds"
+    df = create_rounds(df)
+    df = fill_rounds(df)
 
-    # # Fill ended_at
-    # df = fill_ended_at(df)
+    # Create series "minutes"
+    df = create_minutes(df)
+    df = fill_minutes(df)
+
+    # Create series "elapsed"
+    df = create_elapsed(df)
+    click.echo("> Processed")
     df.info(verbose=True)
 
 
@@ -193,28 +201,13 @@ def fill_ending_method(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fill_round_format(df: pd.DataFrame) -> pd.DataFrame:
-    df["round_format"] = df.groupby(["promotion"])["round_format"].transform(
-        lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
-    )
+    df["round_format"] = df.groupby(["promotion", "sport", "division"])[
+        "round_format"
+    ].transform(lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0]))
     if count_nan(df["round_format"]) > 0:
         df["round_format"] = df.groupby(["sport", "division"])[
             "round_format"
         ].transform(lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0]))
-    # # Fill minutes
-    # df["regulation.minutes"].fillna(
-    #     df["round_format"]
-    #     .apply(lambda x: x if x is np.nan else np.nan if "*" in x else calc_minutes(x))
-    #     .astype(df["regulation.minutes"].dtype),
-    #     inplace=True,
-    # )
-    # if count_nan(df["regulation.minutes"]) > 0:
-    #     df["regulation.minutes"].fillna(df["ended_at.elapsed"], inplace=True)
-    #     if count_nan(df["regulation.minutes"]) > 0:
-    #         mask = df["round_format"] == "*"
-    #         masked = df.loc[mask, "regulation.minutes"]
-    #         df.loc[mask, "regulation.minutes"] = masked.fillna(
-    #             masked.mean(),
-    #         )
     return df
 
 
@@ -250,6 +243,83 @@ def fill_ended_at(df: pd.DataFrame) -> pd.DataFrame:
     # Fill time
 
     df = df.drop(["ended_at.progress"], axis="columns")
+    return df
+
+
+def fill_rounds(df: pd.DataFrame) -> pd.DataFrame:
+    mask = np.logical_and(np.logical_not(df["round"].isnull()), df["rounds"].isnull())
+    df.loc[mask, "rounds"] = df.loc[mask, "round"]
+    return df
+
+
+def fill_minutes(df: pd.DataFrame) -> pd.DataFrame:
+    # mask = np.logical_and(np.logical_not(df[""]))
+    return df
+
+
+def create_elapsed(df: pd.DataFrame) -> pd.DataFrame:
+    def helper(row):
+        if row.isnull().any():
+            return np.nan
+        round_format = row["round_format"]
+        time = row["time.m"] + row["time.s"] / 60
+        round = int(row["round"])
+        parsed = parse_round_format(round_format)
+        type_ = parsed["type"]
+        if type_ == ROUND_FORMAT_TYPE_NORMAL:
+            round_minutes = parsed["round_minutes"]
+            elapsed = 0
+            for i in range(round - 1):
+                elapsed += round_minutes[i]
+            elapsed += time
+            return elapsed
+        elif type_ == ROUND_FORMAT_TYPE_UNLIM_ROUNDS:
+            return parsed["minutes_per_round"] * (round - 1) + time
+        elif type_ == ROUND_FORMAT_TYPE_UNLIM_ROUND_TIME:
+            return time
+        elif type_ == ROUND_FORMAT_TYPE_ROUND_TIME_UNKNONW:
+            return np.nan
+        raise ValueError(f"unexpected round format type: {type_}")
+
+    df["elapsed"] = (
+        df[["time.m", "time.s", "round", "round_format"]]
+        .apply(helper, axis=1)
+        .astype("float32")
+    )
+    return df
+
+
+def create_rounds(df: pd.DataFrame) -> pd.DataFrame:
+    def helper(x):
+        if pd.isna(x):
+            return np.nan
+        parsed = parse_round_format(x)
+        type_ = parsed["type"]
+        if type_ in [
+            ROUND_FORMAT_TYPE_NORMAL,
+            ROUND_FORMAT_TYPE_UNLIM_ROUND_TIME,
+            ROUND_FORMAT_TYPE_ROUND_TIME_UNKNONW,
+        ]:
+            return parsed["rounds"]
+        elif type_ == ROUND_FORMAT_TYPE_UNLIM_ROUNDS:
+            return np.nan
+        raise ValueError(f"unexpected round format type: {type_}")
+
+    df["rounds"] = df["round_format"].apply(helper).astype("float32")
+    return df
+
+
+def create_minutes(df: pd.DataFrame) -> pd.DataFrame:
+    def helper(x):
+        if pd.isna(x):
+            return np.nan
+        parsed = parse_round_format(x)
+        type_ = parsed["type"]
+        if type_ == ROUND_FORMAT_TYPE_NORMAL:
+            return parsed["minutes"]
+        return np.nan
+
+    df["minutes"] = df["round_format"].apply(helper).astype("float32")
     return df
 
 
