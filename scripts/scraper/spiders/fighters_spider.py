@@ -1061,6 +1061,7 @@ def infer_ending_method(supplemental: str, status: Optional[str] = None) -> str:
             # KO/TKO
             if (
                 "ko/tko" in supplemental
+                or "knockdown" in supplemental
                 or "kick" in supplemental
                 or "punch" in supplemental
                 or "elbow" in supplemental
