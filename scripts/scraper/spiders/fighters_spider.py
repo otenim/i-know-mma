@@ -112,6 +112,16 @@ class FightersSpider(scrapy.Spider):
             )
             return
 
+        # Pro mma record (optional)
+        record = profile_section.xpath(
+            "./ul/li/strong[text()='Pro MMA Record:']/following-sibling::span[1]/text()"
+        ).get()
+        if record is not None:
+            try:
+                ret["record"] = parse_record(record)
+            except InvalidRecordPatternError as e:
+                self.logger.error(e)
+
         # Date of birth (optional)
         date_of_birth = profile_section.xpath(
             "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()"
