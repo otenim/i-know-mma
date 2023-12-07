@@ -66,3 +66,8 @@ class InvalidRecordPatternError(Exception):
 class InvalidRoundFormatPatternError(Exception):
     def __init__(self, pattern: str) -> None:
         super().__init__(f"invalid round format pattern: {pattern}")
+
+
+class InvalidLastWeighInPatternError(Exception):
+    def __init__(self, pattern: str) -> None:
+        super().__init__(f"invalid last weigh-in pattern: {pattern}")

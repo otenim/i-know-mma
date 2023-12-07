@@ -144,6 +144,18 @@ class FightersSpider(scrapy.Spider):
             except InvalidWeightClassValueError as e:
                 self.logger.error(e)
 
+        # Last weigh-in (optional)
+        last_weigh_in = profile_section.xpath(
+            "./ul/li/strong[text()='| Last Weigh-In:']/following-sibling::span[1]/text()"
+        ).get()
+        if last_weigh_in is not None:
+            try:
+                parsed = parse_last_weigh_in(last_weigh_in)
+                if parsed is not None:
+                    ret["last_weigh_in"] = parsed
+            except InvalidLastWeighInPatternError as e:
+                self.logger.error(e)
+
         # Career disclosed earnings (optional)
         career_earnings = profile_section.xpath(
             "./ul/li/strong[text()='Career Disclosed Earnings:']/following-sibling::span[1]/text()"
@@ -846,6 +858,18 @@ def parse_weight_summary(weight_summary: str) -> Dict[str, float]:
     if ret == {}:
         raise InvalidWeightSummaryPatternError(weight_summary)
     return ret
+
+
+def parse_last_weigh_in(last_weigh_in: str) -> Union[float, None]:
+    normed = normalize_text(last_weigh_in)
+    matched = re.match(r"^([\d\.]+) (kgs?|lbs?)", normed)
+    if matched is not None:
+        value = float(matched.group(1))
+        unit = matched.group(2)
+        return to_kg(value, unit=unit)
+    if normed in VALUES_NOT_AVAILABLE:
+        return None
+    raise InvalidLastWeighInPatternError(last_weigh_in)
 
 
 def parse_record(record: str) -> Dict[str, int]:
