@@ -3,7 +3,7 @@ import click
 import json
 import numpy as np
 from scraper.spiders.constants import *
-from scraper.spiders.fighters_spider import parse_round_format
+from scraper.spiders.fighters_spider import parse_round_format, to_weight_limit
 from typing import Union
 
 
@@ -24,60 +24,69 @@ def main(jsonfile: str):
     df_results = pd.json_normalize(jsondata, record_path="results", meta=["id"])
 
     # Merge fighters & results
-    df = (
-        pd.merge(df_fighters, df_results, on="id")
-        .drop(
-            [
-                "name",
-                "born",
-                "out_of",
-                "nickname",
-                "career_record.w",
-                "career_record.l",
-                "career_record.d",
-                "foundation_styles",
-                "title_info.for",
-                "title_info.as",
-                "odds",
-            ],
-            axis="columns",
-        )
-        .astype(
-            {
-                "id": "string",
-                "nationality": "string",
-                "weight_class": "string",
-                "career_earnings": "float32",
-                "affiliation": "string",
-                "height": "float32",
-                "reach": "float32",
-                "head_coach": "string",
-                "college": "string",
-                "division": "string",
-                "sport": "string",
-                "status": "string",
-                "opponent": "string",
-                "promotion": "string",
-                "method": "string",
-                "supplemental": "string",
-                "billing": "string",
-                "round_format": "string",
-                "referee": "string",
-                "record.w": "float32",
-                "record.l": "float32",
-                "record.d": "float32",
-                "round": "float32",
-                "time.m": "float32",
-                "time.s": "float32",
-                "age": "float32",
-                "weight.class": "string",
-                "weight.limit": "float32",
-                "weight.weigh_in": "float32",
-            }
-        )
+    df = pd.merge(df_fighters, df_results, on="id").astype(
+        {
+            "id": "string",
+            "name": "string",
+            "nickname": "string",
+            "nationality": "string",
+            "last_weigh_in": "float32",
+            "weight_class": "string",
+            "career_earnings": "float32",
+            "career_record.w": "float32",
+            "career_record.l": "float32",
+            "career_record.d": "float32",
+            "affiliation": "string",
+            "height": "float32",
+            "reach": "float32",
+            "head_coach": "string",
+            "college": "string",
+            "division": "string",
+            "sport": "string",
+            "status": "string",
+            "opponent": "string",
+            "promotion": "string",
+            "method": "string",
+            "supplemental": "string",
+            "billing": "string",
+            "round_format": "string",
+            "referee": "string",
+            "record.w": "float32",
+            "record.l": "float32",
+            "record.d": "float32",
+            "round": "float32",
+            "time.m": "float32",
+            "time.s": "float32",
+            "age": "float32",
+            "weight.class": "string",
+            "weight.limit": "float32",
+            "weight.weigh_in": "float32",
+            "title_info.for": "string",
+            "title_info.as": "string",
+            "odds": "float32",
+        }
     )
     df["date_of_birth"] = pd.to_datetime(df["date_of_birth"], format="%Y-%m-%d")
     df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
+    df["time"] = df["time.m"] + df["time.s"] / 60
+    df = df.drop(
+        [
+            "name",
+            "nickname",
+            "career_record.w",
+            "career_record.l",
+            "career_record.d",
+            "time.m",
+            "time.s",
+            "title_info.for",
+            "title_info.as",
+            "odds",
+            "last_weigh_in",
+            "born",
+            "out_of",
+        ],
+        axis="columns",
+    )
     click.echo("> Plain")
     df.info(verbose=True)
 
@@ -108,14 +117,8 @@ def main(jsonfile: str):
 
     # Fill round_format
     df = fill_round_format(df)
-
-    # Create series "rounds"
-    df = create_rounds(df)
-    df = fill_rounds(df)
-
-    # Create series "minutes"
-    df = create_minutes(df)
-    df = fill_minutes(df)
+    df["round_format.rounds"] = calc_rounds(df["round_format"])
+    df["round_format.minutes"] = calc_minutes(df["round_format"])
 
     # Fill round
     df = fill_round(df)
@@ -123,8 +126,9 @@ def main(jsonfile: str):
     # Fill time
     df = fill_time(df)
 
-    # Create series "progress"
-    df = create_progress(df)
+    # Fill weight
+    df = fill_weight(df)
+
     click.echo("> Processed")
     df.info(verbose=True)
 
@@ -191,24 +195,6 @@ def fill_age(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def fill_ending_method(df: pd.DataFrame) -> pd.DataFrame:
-    df["ended_by.detail"] = df.groupby("id")["ended_by.detail"].transform(
-        lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
-    )
-    if count_nan(df["ended_by.detail"]) > 0:
-        df["ended_by.detail"] = df.groupby("weight_class")["ended_by.detail"].transform(
-            lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
-        )
-        if count_nan(df["ended_by.detail"]) > 0:
-            df["ended_by.detail"].fillna(
-                df["ended_by.detail"].mode().iat[0], inplace=True
-            )
-    df["ended_by.type"].fillna(
-        (df["ended_by.detail"].apply(lambda x: infer(x))).astype("string"), inplace=True
-    )
-    return df
-
-
 def fill_round_format(df: pd.DataFrame) -> pd.DataFrame:
     df["round_format"] = df.groupby(["promotion", "sport", "division"])[
         "round_format"
@@ -234,18 +220,24 @@ def fill_round(df: pd.DataFrame) -> pd.DataFrame:
             ENDING_METHOD_DRAW_UNKNOWN,
         ]
     )
-    df.loc[mask, "round"] = df.loc[mask, "round"].fillna(df.loc[mask, "rounds"])
+    rounds = calc_rounds(df["round_format"])[mask]
+    df.loc[mask, "round"] = df.loc[mask, "round"].fillna(rounds)
     mask = df["round_format"] == "*"
     df.loc[mask, "round"] = df.loc[mask, "round"].fillna(1)
 
     # Fill
-    df["round"] = df.groupby(["id", "sport", "rounds"])["round"].transform(
+    df["round"] = df.groupby(["id", "round_format"])["round"].transform(
         lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
     )
+    if count_nan(df["round"]) > 0:
+        df["round"] = df.groupby("id")["round"].transform(
+            lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
+        )
     return df
 
 
 def fill_time(df: pd.DataFrame) -> pd.DataFrame:
+    # Decision
     mask = df["method"].isin(
         [
             ENDING_METHOD_DECISION_UNANIMOUS,
@@ -266,64 +258,71 @@ def fill_time(df: pd.DataFrame) -> pd.DataFrame:
         parsed = parse_round_format(round_format)
         if parsed["type"] == ROUND_FORMAT_TYPE_NORMAL:
             if parsed["ot"]:
-                row["time.m"] = parsed["ot_minutes"]
+                row["time"] = parsed["ot_minutes"]
             else:
-                row["time.m"] = parsed["round_minutes"][-1]
-            row["time.s"] = 0
+                row["time"] = parsed["round_minutes"][-1]
             return row
         return row
 
     df.loc[mask] = df.loc[mask].apply(helper, axis=1)
-    return df
 
-
-def fill_rounds(df: pd.DataFrame) -> pd.DataFrame:
-    mask = np.logical_and(np.logical_not(df["round"].isnull()), df["rounds"].isnull())
-    df.loc[mask, "rounds"] = df.loc[mask, "round"]
-    return df
-
-
-def fill_minutes(df: pd.DataFrame) -> pd.DataFrame:
-    time = df["time.m"] + df["time.s"] / 60
-    mask = np.logical_and(np.logical_not(time.isnull()), df["minutes"].isnull())
-    df.loc[mask, "minutes"] = time[mask]
-    return df
-
-
-def create_progress(df: pd.DataFrame) -> pd.DataFrame:
-    def helper(row):
-        if row.isnull().any():
-            return np.nan
-        round_format = row["round_format"]
-        time = row["time.m"] + row["time.s"] / 60
-        round = int(row["round"])
-        parsed = parse_round_format(round_format)
-        type_ = parsed["type"]
-        if type_ == ROUND_FORMAT_TYPE_NORMAL:
-            round_minutes = parsed["round_minutes"]
-            elapsed = 0
-            for i in range(round - 1):
-                elapsed += round_minutes[i]
-            elapsed += time
-            return elapsed
-        elif type_ == ROUND_FORMAT_TYPE_UNLIM_ROUNDS:
-            return parsed["minutes_per_round"] * (round - 1) + time
-        elif type_ == ROUND_FORMAT_TYPE_UNLIM_ROUND_TIME:
-            return time
-        elif type_ == ROUND_FORMAT_TYPE_ROUND_TIME_UNKNONW:
-            return np.nan
-        raise ValueError(f"unexpected round format type: {type_}")
-
-    elapsed = (
-        df[["time.m", "time.s", "round", "round_format"]]
-        .apply(helper, axis=1)
-        .astype("float32")
+    # Fill
+    df["time"] = df.groupby(["id", "round_format"])["time"].transform(
+        lambda x: x.fillna(x.mean())
     )
-    df["progress"] = elapsed / df["minutes"]
     return df
 
 
-def create_rounds(df: pd.DataFrame) -> pd.DataFrame:
+def fill_weight(df: pd.DataFrame):
+    # Fill weight.class
+    df = df.sort_values(by=["date"])
+    df["weight.class"] = df.groupby("id")["weight.class"].ffill().bfill()
+
+    # Fill weight.limit
+    df["weight.limit"].fillna(
+        df["weight.class"]
+        .apply(lambda x: x if pd.isna(x) else to_weight_limit(x))
+        .astype(df["weight.limit"].dtype),
+        inplace=True,
+    )
+
+    # Fill weight.weigh_in
+    df["weight.weigh_in"].fillna(df["weight.limit"], inplace=True)
+    return df
+
+
+# def create_progress(df: pd.DataFrame) -> pd.DataFrame:
+#     def helper(row):
+#         if row.isnull().any():
+#             return np.nan
+#         round_format = row["round_format"]
+#         time = row["time"]
+#         round = int(row["round"])
+#         parsed = parse_round_format(round_format)
+#         type_ = parsed["type"]
+#         if type_ == ROUND_FORMAT_TYPE_NORMAL:
+#             round_minutes = parsed["round_minutes"]
+#             elapsed = 0
+#             for i in range(round - 1):
+#                 elapsed += round_minutes[i]
+#             elapsed += time
+#             return elapsed
+#         elif type_ == ROUND_FORMAT_TYPE_UNLIM_ROUNDS:
+#             return parsed["minutes_per_round"] * (round - 1) + time
+#         elif type_ == ROUND_FORMAT_TYPE_UNLIM_ROUND_TIME:
+#             return time
+#         elif type_ == ROUND_FORMAT_TYPE_ROUND_TIME_UNKNONW:
+#             return np.nan
+#         raise ValueError(f"unexpected round format type: {type_}")
+
+#     elapsed = (
+#         df[["time", "round", "round_format"]].apply(helper, axis=1).astype("float32")
+#     )
+#     df["progress"] = elapsed / df["minutes"]
+#     return df
+
+
+def calc_rounds(round_format: pd.Series) -> pd.Series:
     def helper(x):
         if pd.isna(x):
             return np.nan
@@ -335,15 +334,12 @@ def create_rounds(df: pd.DataFrame) -> pd.DataFrame:
             ROUND_FORMAT_TYPE_ROUND_TIME_UNKNONW,
         ]:
             return parsed["rounds"]
-        elif type_ == ROUND_FORMAT_TYPE_UNLIM_ROUNDS:
-            return np.nan
-        raise ValueError(f"unexpected round format type: {type_}")
+        return np.nan
 
-    df["rounds"] = df["round_format"].apply(helper).astype("float32")
-    return df
+    return round_format.apply(helper).astype("float32")
 
 
-def create_minutes(df: pd.DataFrame) -> pd.DataFrame:
+def calc_minutes(round_format: pd.DataFrame) -> pd.DataFrame:
     def helper(x):
         if pd.isna(x):
             return np.nan
@@ -353,8 +349,7 @@ def create_minutes(df: pd.DataFrame) -> pd.DataFrame:
             return parsed["minutes"]
         return np.nan
 
-    df["minutes"] = df["round_format"].apply(helper).astype("float32")
-    return df
+    return round_format.apply(helper).astype("float32")
 
 
 if __name__ == "__main__":

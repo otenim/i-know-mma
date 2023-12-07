@@ -810,7 +810,7 @@ def parse_odds(odds: str) -> float:
     if matched is not None:
         value = float(matched.group(2))
         sign = matched.group(1)
-        if sign is "-":
+        if sign == "-":
             value *= -1
         return (value / 100) + 1.0
     raise InvalidOddsPatternError(odds)
