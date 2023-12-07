@@ -32,6 +32,9 @@ def main(jsonfile: str):
                 "born",
                 "out_of",
                 "nickname",
+                "career_record.w",
+                "career_record.l",
+                "career_record.d",
                 "foundation_styles",
                 "title_info.for",
                 "title_info.as",
@@ -116,6 +119,9 @@ def main(jsonfile: str):
 
     # Fill round
     df = fill_round(df)
+
+    # Fill time
+    df = fill_time(df)
 
     # Create series "progress"
     df = create_progress(df)
@@ -215,6 +221,7 @@ def fill_round_format(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fill_round(df: pd.DataFrame) -> pd.DataFrame:
+    # Decision
     mask = df["method"].isin(
         [
             ENDING_METHOD_DECISION_UNANIMOUS,
@@ -228,9 +235,45 @@ def fill_round(df: pd.DataFrame) -> pd.DataFrame:
         ]
     )
     df.loc[mask, "round"] = df.loc[mask, "round"].fillna(df.loc[mask, "rounds"])
-
-    mask = df["round_format"] == ROUND_FORMAT_TYPE_UNLIM_ROUND_TIME
+    mask = df["round_format"] == "*"
     df.loc[mask, "round"] = df.loc[mask, "round"].fillna(1)
+
+    # Fill
+    df["round"] = df.groupby(["id", "sport", "rounds"])["round"].transform(
+        lambda x: x if x.mode().empty else x.fillna(x.mode().iat[0])
+    )
+    return df
+
+
+def fill_time(df: pd.DataFrame) -> pd.DataFrame:
+    mask = df["method"].isin(
+        [
+            ENDING_METHOD_DECISION_UNANIMOUS,
+            ENDING_METHOD_DECISION_MAJORITY,
+            ENDING_METHOD_DECISION_SPLIT,
+            ENDING_METHOD_DECISION_UNKNOWN,
+            ENDING_METHOD_DRAW_UNANIMOUS,
+            ENDING_METHOD_DRAW_MAJORITY,
+            ENDING_METHOD_DRAW_SPLIT,
+            ENDING_METHOD_DRAW_UNKNOWN,
+        ]
+    )
+
+    def helper(row: pd.DataFrame) -> pd.DataFrame:
+        round_format = row["round_format"]
+        if pd.isna(round_format):
+            return row
+        parsed = parse_round_format(round_format)
+        if parsed["type"] == ROUND_FORMAT_TYPE_NORMAL:
+            if parsed["ot"]:
+                row["time.m"] = parsed["ot_minutes"]
+            else:
+                row["time.m"] = parsed["round_minutes"][-1]
+            row["time.s"] = 0
+            return row
+        return row
+
+    df.loc[mask] = df.loc[mask].apply(helper, axis=1)
     return df
 
 
