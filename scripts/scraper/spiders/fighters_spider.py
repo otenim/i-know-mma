@@ -113,12 +113,12 @@ class FightersSpider(scrapy.Spider):
             return
 
         # Pro mma record (optional)
-        record = profile_section.xpath(
+        career_record = profile_section.xpath(
             "./ul/li/strong[text()='Pro MMA Record:']/following-sibling::span[1]/text()"
         ).get()
-        if record is not None:
+        if career_record is not None:
             try:
-                ret["record"] = parse_record(record)
+                ret["career_record"] = parse_record(career_record)
             except InvalidRecordPatternError as e:
                 self.logger.error(e)
 
