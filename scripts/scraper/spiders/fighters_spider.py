@@ -372,7 +372,7 @@ class FightersSpider(scrapy.Spider):
                     STATUS_WIN,
                     STATUS_LOSS,
                     STATUS_DRAW,
-                    STATUS_NO_CONTEST,
+                    STATUS_NC,
                 ]:
                     # Summary of the match (must)
                     match_summary_section = result_section.xpath(
@@ -488,108 +488,116 @@ def normalize_text(text: str, lower: bool = True) -> str:
 
 def normalize_status(status: str) -> str:
     normed = normalize_text(status)
-    if normed in VALUES_STATUS_WIN:
+    if normed in STATUSES:
+        return normed
+    if normed in ["win"]:
         return STATUS_WIN
-    if normed in VALUES_STATUS_LOSS:
+    if normed in ["loss"]:
         return STATUS_LOSS
-    if normed in VALUES_STATUS_DRAW:
+    if normed in ["draw"]:
         return STATUS_DRAW
-    if normed in VALUES_STATUS_CANCELLED:
+    if normed in ["cancelled", "cancelled bout"]:
         return STATUS_CANCELLED
-    if normed in VALUES_STATUS_NO_CONTEST:
-        return STATUS_NO_CONTEST
-    if normed in VALUES_STATUS_UPCOMING:
+    if normed in ["no contest", "overturned to no contest"]:
+        return STATUS_NC
+    if normed in ["upcoming", "confirmed upcoming bout"]:
         return STATUS_UPCOMING
-    if normed in VALUES_STATUS_UNKNOWN:
+    if normed in ["unknown", "n/a", "na"]:
         return STATUS_UNKNOWN
     raise InvalidStatusValueError(status)
 
 
 def normalize_sport(sport: str) -> str:
     normed = normalize_text(sport)
-    if normed in VALUES_SPORT_MMA:
+    if normed in SPORTS:
+        return normed
+    if normed in ["mma", "pancrase"]:
         return SPORT_MMA
-    if normed in VALUES_SPORT_KNUCKLE_MMA:
+    if normed in ["knuckle_mma"]:
         return SPORT_KNUCKLE_MMA
-    if normed in VALUES_SPORT_BOX:
+    if normed in ["boxing", "boxing_cage"]:
         return SPORT_BOX
-    if normed in VALUES_SPORT_KNUCKLE_BOX:
+    if normed in ["knuckle"]:
         return SPORT_KNUCKLE_BOX
-    if normed in VALUES_SPORT_KICK:
+    if normed in ["kickboxing"]:
         return SPORT_KICK
-    if normed in VALUES_SPORT_MUAY:
+    if normed in ["muay"]:
         return SPORT_MUAY
-    if normed in VALUES_SPORT_KARATE:
+    if normed in ["karate"]:
         return SPORT_KARATE
-    if normed in VALUES_SPORT_SANDA:
+    if normed in ["sanda"]:
         return SPORT_SANDA
-    if normed in VALUES_SPORT_LETHWEI:
+    if normed in ["lethwei"]:
         return SPORT_LETHWEI
-    if normed in VALUES_SPORT_GRAPPLE:
+    if normed in ["grappling"]:
         return SPORT_GRAPPLE
-    if normed in VALUES_SPORT_SHOOT:
+    if normed in ["shootboxing"]:
         return SPORT_SHOOT
-    if normed in VALUES_SPORT_WRESTLE:
+    if normed in ["wrestling"]:
         return SPORT_WRESTLE
-    if normed in VALUES_SPORT_SAMBO:
+    if normed in ["sambo"]:
         return SPORT_SAMBO
-    if normed in VALUES_SPORT_VALE:
+    if normed in ["valetudo"]:
         return SPORT_VALE
-    if normed in VALUES_SPORT_JUDO:
+    if normed in ["judo"]:
         return SPORT_JUDO
-    if normed in VALUES_SPORT_COMBAT_JIU_JITSU:
-        return SPORT_COMBAT_JIU_JITSU
-    if normed in VALUES_SPORT_CUSTOM:
+    if normed in ["combat_jj"]:
+        return SPORT_COMBAT_JJ
+    if normed in ["custom"]:
         return SPORT_CUSTOM
     raise InvalidSportValueError(sport)
 
 
 def normalize_weight_class(weight_class: str) -> str:
     normed = normalize_text(weight_class)
-    if normed in VALUES_WEIGHT_CLASS_ATOM:
+    if normed in WEIGHT_CLASSES:
+        return normed
+    if normed in ["atomweight"]:
         return WEIGHT_CLASS_ATOM
-    if normed in VALUES_WEIGHT_CLASS_STRAW:
+    if normed in ["strawweight"]:
         return WEIGHT_CLASS_STRAW
-    if normed in VALUES_WEIGHT_CLASS_FLY:
+    if normed in ["flyweight"]:
         return WEIGHT_CLASS_FLY
-    if normed in VALUES_WEIGHT_CLASS_BANTAM:
+    if normed in ["bantamweight"]:
         return WEIGHT_CLASS_BANTAM
-    if normed in VALUES_WEIGHT_CLASS_FEATHER:
+    if normed in ["featherweight"]:
         return WEIGHT_CLASS_FEATHER
-    if normed in VALUES_WEIGHT_CLASS_LIGHT:
+    if normed in ["lightweight"]:
         return WEIGHT_CLASS_LIGHT
-    if normed in VALUES_WEIGHT_CLASS_SUPER_LIGHT:
-        return WEIGHT_CLASS_SUPER_LIGHT
-    if normed in VALUES_WEIGHT_CLASS_WELTER:
+    if normed in ["super lightweight"]:
+        return WEIGHT_CLASS_S_LIGHT
+    if normed in ["welterweight"]:
         return WEIGHT_CLASS_WELTER
-    if normed in VALUES_WEIGHT_CLASS_SUPER_WELTER:
-        return WEIGHT_CLASS_SUPER_WELTER
-    if normed in VALUES_WEIGHT_CLASS_MIDDLE:
+    if normed in ["super welterweight"]:
+        return WEIGHT_CLASS_S_WELTER
+    if normed in ["middleweight"]:
         return WEIGHT_CLASS_MIDDLE
-    if normed in VALUES_WEIGHT_CLASS_SUPER_MIDDLE:
-        return WEIGHT_CLASS_SUPER_MIDDLE
-    if normed in VALUES_WEIGHT_CLASS_LIGHT_HEAVY:
-        return WEIGHT_CLASS_LIGHT_HEAVY
-    if normed in VALUES_WEIGHT_CLASS_HEAVY:
+    if normed in ["super middleweight"]:
+        return WEIGHT_CLASS_S_MIDDLE
+    if normed in ["light heavyweight"]:
+        return WEIGHT_CLASS_L_HEAVY
+    if normed in ["heavyweight"]:
         return WEIGHT_CLASS_HEAVY
-    if normed in VALUES_WEIGHT_CLASS_CRUISER:
+    if normed in ["cruiserweight"]:
         return WEIGHT_CLASS_CRUISER
-    if normed in VALUES_WEIGHT_CLASS_SUPER_HEAVY:
-        return WEIGHT_CLASS_SUPER_HEAVY
+    if normed in ["super heavyweight"]:
+        return WEIGHT_CLASS_S_HEAVY
     raise InvalidWeightClassValueError(weight_class)
 
 
 def normalize_billing(billing: str) -> str:
     normed = normalize_text(billing)
-    if normed in VALUES_BILLING_MAIN:
+    if normed in BILLINGS:
+        return normed
+    if normed in ["main event"]:
         return BILLING_MAIN
-    if normed in VALUES_BILLING_CO_MAIN:
+    if normed in ["co-main event"]:
         return BILLING_CO_MAIN
-    if normed in VALUES_BILLING_MAIN_CARD:
+    if normed in ["main card"]:
         return BILLING_MAIN_CARD
-    if normed in VALUES_BILLING_PRELIM_CARD:
+    if normed in ["preliminary card"]:
         return BILLING_PRELIM_CARD
-    if normed in VALUES_BILLING_POSTLIM_CARD:
+    if normed in ["postlim"]:
         return BILLING_POSTLIM_CARD
     raise InvalidBillingValueError(billing)
 
@@ -778,7 +786,7 @@ def parse_match_summary(match_summary: str) -> Dict:
                 "method": ENDING_METHOD_DRAW_UNKNOWN
                 if status == STATUS_DRAW
                 else ENDING_METHOD_NO_CONTEST_UNKNOWN
-                if status == STATUS_NO_CONTEST
+                if status == STATUS_NC
                 else ENDING_METHOD_UNKNOWN,
             }
     except (
@@ -961,23 +969,23 @@ def to_weight_class(value: float, unit: str = "kg", margin: float = 0.02) -> str
         return WEIGHT_CLASS_FEATHER
     if kg <= WEIGHT_LIMIT_LIGHT * scale:
         return WEIGHT_CLASS_LIGHT
-    if kg <= WEIGHT_LIMIT_SUPER_LIGHT * scale:
-        return WEIGHT_CLASS_SUPER_LIGHT
+    if kg <= WEIGHT_LIMIT_S_LIGHT * scale:
+        return WEIGHT_CLASS_S_LIGHT
     if kg <= WEIGHT_LIMIT_WELTER * scale:
         return WEIGHT_CLASS_WELTER
-    if kg <= WEIGHT_LIMIT_SUPER_WELTER * scale:
-        return WEIGHT_CLASS_SUPER_WELTER
+    if kg <= WEIGHT_LIMIT_S_WELTER * scale:
+        return WEIGHT_CLASS_S_WELTER
     if kg <= WEIGHT_LIMIT_MIDDLE * scale:
         return WEIGHT_CLASS_MIDDLE
-    if kg <= WEIGHT_LIMIT_SUPER_MIDDLE:
-        return WEIGHT_CLASS_SUPER_MIDDLE
-    if kg <= WEIGHT_LIMIT_LIGHT_HEAVY * scale:
-        return WEIGHT_CLASS_LIGHT_HEAVY
+    if kg <= WEIGHT_LIMIT_S_MIDDLE:
+        return WEIGHT_CLASS_S_MIDDLE
+    if kg <= WEIGHT_LIMIT_L_HEAVY * scale:
+        return WEIGHT_CLASS_L_HEAVY
     if kg <= WEIGHT_LIMIT_CRUISER * scale:
         return WEIGHT_CLASS_CRUISER
     if kg <= WEIGHT_LIMIT_HEAVY * scale:
         return WEIGHT_CLASS_HEAVY
-    return WEIGHT_CLASS_SUPER_HEAVY
+    return WEIGHT_CLASS_S_HEAVY
 
 
 def to_weight_limit(weight_class: str) -> Union[None, float]:
@@ -995,23 +1003,23 @@ def to_weight_limit(weight_class: str) -> Union[None, float]:
         return WEIGHT_LIMIT_FEATHER
     if weight_class == WEIGHT_CLASS_LIGHT:
         return WEIGHT_LIMIT_LIGHT
-    if weight_class == WEIGHT_CLASS_SUPER_LIGHT:
-        return WEIGHT_LIMIT_SUPER_LIGHT
+    if weight_class == WEIGHT_CLASS_S_LIGHT:
+        return WEIGHT_LIMIT_S_LIGHT
     if weight_class == WEIGHT_CLASS_WELTER:
         return WEIGHT_LIMIT_WELTER
-    if weight_class == WEIGHT_CLASS_SUPER_WELTER:
-        return WEIGHT_LIMIT_SUPER_WELTER
+    if weight_class == WEIGHT_CLASS_S_WELTER:
+        return WEIGHT_LIMIT_S_WELTER
     if weight_class == WEIGHT_CLASS_MIDDLE:
         return WEIGHT_LIMIT_MIDDLE
-    if weight_class == WEIGHT_CLASS_SUPER_MIDDLE:
-        return WEIGHT_LIMIT_SUPER_MIDDLE
-    if weight_class == WEIGHT_CLASS_LIGHT_HEAVY:
-        return WEIGHT_LIMIT_LIGHT_HEAVY
+    if weight_class == WEIGHT_CLASS_S_MIDDLE:
+        return WEIGHT_LIMIT_S_MIDDLE
+    if weight_class == WEIGHT_CLASS_L_HEAVY:
+        return WEIGHT_LIMIT_L_HEAVY
     if weight_class == WEIGHT_CLASS_CRUISER:
         return WEIGHT_LIMIT_CRUISER
     if weight_class == WEIGHT_CLASS_HEAVY:
         return WEIGHT_LIMIT_HEAVY
-    return WEIGHT_LIMIT_SUPER_HEAVY
+    return WEIGHT_LIMIT_S_HEAVY
 
 
 def to_meter(feet: float, inch: float) -> float:
@@ -1034,9 +1042,9 @@ def infer_ending_method(supplemental: str, status: Optional[str] = None) -> str:
             return ENDING_METHOD_OVERTURNED
     else:
         status = normalize_status(status)
-        if status not in [STATUS_WIN, STATUS_LOSS, STATUS_DRAW, STATUS_NO_CONTEST]:
+        if status not in [STATUS_WIN, STATUS_LOSS, STATUS_DRAW, STATUS_NC]:
             raise ValueError(
-                f"unexpected status: {status} (one of {STATUS_WIN}, {STATUS_LOSS}, {STATUS_DRAW} or {STATUS_NO_CONTEST} is expected)"
+                f"unexpected status: {status} (one of {STATUS_WIN}, {STATUS_LOSS}, {STATUS_DRAW} or {STATUS_NC} is expected)"
             )
         # Win|Loss
         if status in [STATUS_WIN, STATUS_LOSS]:
