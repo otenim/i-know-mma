@@ -69,7 +69,7 @@ class FightersSpider(scrapy.Spider):
         ret = {}
 
         # Fighter ID (must)
-        ret["id"] = get_id_from_url(response.url)
+        ret["url"] = response.url
 
         # Fighter name (must)
         name = response.xpath(
@@ -170,7 +170,7 @@ class FightersSpider(scrapy.Spider):
         if len(affili_section) == 1:
             url = affili_section.xpath("./@href").get()
             if url is not None:
-                ret["affiliation"] = get_id_from_url(url)
+                ret["affiliation"] = response.urljoin(url)
 
         # Height (optional)
         # e.g. "5\'9\" (175cm)"
@@ -330,7 +330,7 @@ class FightersSpider(scrapy.Spider):
                 ).get()
                 if opponent_url is None:
                     continue
-                item["opponent"] = get_id_from_url(opponent_url)
+                item["opponent"] = response.urljoin(opponent_url)
 
                 # Record of the fighter (optional)
                 record = opponent_section.xpath(
@@ -347,8 +347,7 @@ class FightersSpider(scrapy.Spider):
                     "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/@href"
                 ).get()
                 if promo_url is not None:
-                    promo_url = response.urljoin(promo_url)
-                    item["promotion"] = get_id_from_url(promo_url)
+                    item["promotion"] = response.urljoin(promo_url)
                 if "promotion" not in item:
                     promo_link_section = result_section.xpath(
                         "./div[@class='result']/div[@class='summary']/div[@class='notes']/a"
@@ -359,7 +358,14 @@ class FightersSpider(scrapy.Spider):
                         if title is not None:
                             title = normalize_text(title)
                             if title == "promotion page" and promo_url is not None:
-                                item["promotion"] = get_id_from_url(promo_url)
+                                item["promotion"] = response.urljoin(promo_url)
+
+                # Event of the match (optional)
+                event_url = result_section.xpath(
+                    "./div[@class='result']/div[@class='summary']/div[@class='notes']/a[@title='Event Page']/@href"
+                ).get()
+                if event_url is not None:
+                    item["event"] = response.urljoin(event_url)
 
                 # Details of the result (optional)
                 if item["status"] in [
@@ -1018,10 +1024,6 @@ def to_kg(value: float, unit: str = "lb") -> float:
     if unit.startswith("lb"):
         return value * 0.453592
     return value
-
-
-def get_id_from_url(url: str) -> str:
-    return url.split("/")[-1]
 
 
 def infer_ending_method(supplemental: str, status: Optional[str] = None) -> str:
