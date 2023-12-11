@@ -581,7 +581,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
         return consts.METHOD_UNKNOWN
 
     # Overturned
-    if "overturned" in normed:
+    if "overturned" in normed or "ref mistake" in normed or "after revis" in normed:
         return consts.METHOD_OVERTURNED
 
     # No contest
@@ -625,9 +625,11 @@ def infer_method(sport: str, status: str, note: str) -> str:
             # Not decision (wrong source)
             if "walk over" in normed or "forfeit" in normed:
                 return consts.METHOD_FORFEIT
+            if "corner stop" in normed:
+                return consts.METHOD_CORNER_STOPPAGE
             if "choke" in normed or "armbar" in normed:
                 return consts.METHOD_SUBMISSION
-            if "tko" in normed:
+            if "tko" in normed or "punches" in normed or "strikes" in normed:
                 return consts.METHOD_KO_TKO
             raise errors.CantInferMethodError(note)
 
@@ -662,6 +664,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 "stoppage",
                 "wave off",
                 "check hook",
+                "loss of consciousness",
             ]
             or "knockdowns" in normed
             or "kick" in normed
@@ -697,6 +700,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or ("pain" in normed and ("recep" in normed or "grip" in normed))
             or "ref stop" in normed
             or "knee from" in normed
+            or "knee," in normed
             or ("spin" in normed and "back" in normed)
             or "knee to" in normed
             or "knee on" in normed
@@ -736,6 +740,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "lock" in normed
             or "choke" in normed
             or "crank" in normed
+            or "crenk" in normed
             or "reverse" in normed
             or "hold" in normed
             or "verbal" in normed
@@ -789,6 +794,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 "threw opponent from ring",
                 "position",
                 "pulled Off opponents glove",
+                "kiick to head of grounded fighter",
             ]
             or "illegal" in normed
             or "foul" in normed
