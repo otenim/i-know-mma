@@ -256,7 +256,7 @@ def fill_time(df: pd.DataFrame) -> pd.DataFrame:
         if pd.isna(round_format):
             return row
         parsed = parse_round_format(round_format)
-        if parsed["type"] == ROUND_FORMAT_TYPE_NORMAL:
+        if parsed["type"] == ROUND_FORMAT_TYPE_REGULAR:
             if parsed["ot"]:
                 row["time"] = parsed["ot_minutes"]
             else:
@@ -300,7 +300,7 @@ def fill_weight(df: pd.DataFrame):
 #         round = int(row["round"])
 #         parsed = parse_round_format(round_format)
 #         type_ = parsed["type"]
-#         if type_ == ROUND_FORMAT_TYPE_NORMAL:
+#         if type_ == ROUND_FORMAT_TYPE_REGULAR:
 #             round_minutes = parsed["round_minutes"]
 #             elapsed = 0
 #             for i in range(round - 1):
@@ -329,7 +329,7 @@ def calc_rounds(round_format: pd.Series) -> pd.Series:
         parsed = parse_round_format(x)
         type_ = parsed["type"]
         if type_ in [
-            ROUND_FORMAT_TYPE_NORMAL,
+            ROUND_FORMAT_TYPE_REGULAR,
             ROUND_FORMAT_TYPE_UNLIM_ROUND_TIME,
             ROUND_FORMAT_TYPE_ROUND_TIME_UNKNONW,
         ]:
@@ -345,7 +345,7 @@ def calc_minutes(round_format: pd.DataFrame) -> pd.DataFrame:
             return np.nan
         parsed = parse_round_format(x)
         type_ = parsed["type"]
-        if type_ == ROUND_FORMAT_TYPE_NORMAL:
+        if type_ == ROUND_FORMAT_TYPE_REGULAR:
             return parsed["minutes"]
         return np.nan
 

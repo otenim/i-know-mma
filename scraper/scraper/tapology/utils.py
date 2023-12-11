@@ -439,7 +439,7 @@ def parse_round_format(round_format: str) -> Dict:
             else:
                 round_minutes.append(int(s))
         ret = {
-            "type": consts.ROUND_FORMAT_TYPE_NORMAL,
+            "type": consts.ROUND_FORMAT_TYPE_REGULAR,
             "ot": ot,
             "rounds": len(round_minutes),
             "minutes": sum(round_minutes),
@@ -626,20 +626,20 @@ def infer_method(sport: str, status: str, note: str) -> str:
     if status in [consts.STATUS_WIN, consts.STATUS_LOSS]:
         # Decision
         if normed in ["unanimous", "decision · un"]:
-            return consts.METHOD_DEC_UNANIMOUS
+            return consts.METHOD_DECISION_UNANIMOUS
         if normed == "majority":
-            return consts.METHOD_DEC_MAJORITY
+            return consts.METHOD_DECISION_MAJORITY
         if normed == "split":
-            return consts.METHOD_DEC_SPLIT
-        if normed == "decision":
-            return consts.METHOD_DEC
+            return consts.METHOD_DECISION_SPLIT
+        if normed == "decition_ision":
+            return consts.METHOD_DECISION
         if "decision" in normed:
             if "unanimous" in normed:
-                return consts.METHOD_DEC_UNANIMOUS
+                return consts.METHOD_DECISION_UNANIMOUS
             if "majority" in normed:
-                return consts.METHOD_DEC_MAJORITY
+                return consts.METHOD_DECISION_MAJORITY
             if "split" in normed or "spilt" in normed or "spit" in normed:
-                return consts.METHOD_DEC_SPLIT
+                return consts.METHOD_DECISION_SPLIT
             if (
                 "technical" in normed
                 or "referee" in normed
@@ -648,11 +648,11 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 or "injur" in normed
                 or "doctor" in normed
             ):
-                return consts.METHOD_DEC_TECHNICAL
+                return consts.METHOD_DECISION_TECHNICAL
             if "points" in normed:
-                return consts.METHOD_DEC_POINTS
+                return consts.METHOD_DECISION_POINTS
             if "extra" in normed or "extension" in normed:
-                return consts.METHOD_DEC
+                return consts.METHOD_DECISION
             # Not decision (wrong source)
             if "walk over" in normed or "forfeit" in normed:
                 return consts.METHOD_FORFEIT
