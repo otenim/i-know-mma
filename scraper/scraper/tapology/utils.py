@@ -572,6 +572,9 @@ def infer_method(sport: str, status: str, note: str) -> str:
             "re",
             "unknown",
             "lost points",
+            "R",
+            "P",
+            "paul asmar",
         ]
         or "organizer" in normed
     ):
@@ -636,6 +639,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 "ground",
                 "strkes",
                 "wave off",
+                "check hook",
             ]
             or "knockdowns" in normed
             or "kick" in normed
@@ -655,6 +659,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "jumping" in normed
             or "flying" in normed
             or "flyng" in normed
+            or "flyign" in normed
             or "stomp" in normed
             or "stri" in normed
             or "slam" in normed
@@ -667,7 +672,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "upercut" in normed
             or "referee stop" in normed
             or "refferee stop" in normed
-            or "painful grip" in normed
+            or ("pain" in normed and ("recep" in normed or "grip" in normed))
             or "ref stop" in normed
             or "knee from" in normed
             or ("spin" in normed and "back" in normed)
@@ -691,15 +696,11 @@ def infer_method(sport: str, status: str, note: str) -> str:
             in [
                 "kumura",
                 "kmura",
-                "crossface",
-                "cross face",
                 "banana split",
                 "whizzer",
-                "leg bar",
                 "chin in the eye",
                 "chin to the eye",
                 "arm hook",
-                "calf crusher",
                 "forearms",
                 "rear naked coke",
                 "paper cutter",
@@ -708,9 +709,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 "boston crab",
                 "electric chair",
             ]
-            or "tapout" in normed
-            or "tap out" in normed
-            or "tap-out" in normed
+            or ("tap" in normed and "out" in normed)
             or "submission" in normed
             or "lock" in normed
             or "choke" in normed
@@ -718,17 +717,13 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "reverse" in normed
             or "hold" in normed
             or "verbal" in normed
-            or "triangle" in normed
+            or "trian" in normed
             or "twister" in normed
-            or "americ" in normed
-            or "amerik" in normed
+            or "ameri" in normed
+            or "spladle" in normed
             or "chicken wing" in normed
-            or "painful reception" in normed
-            or "kneebar" in normed
-            or "knee bar" in normed
-            or "armbar" in normed
-            or "arm bar" in normed
-            or "arbar" in normed
+            or ("cross" in normed and "face" in normed)
+            or (("ar" in normed or "knee" in normed or "leg") and ("bar" in normed))
             or "gatame" in normed
             or "heelhook" in normed
             or "heel hoo" in normed
@@ -737,10 +732,13 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "tobillo" in normed
             or "cranck" in normed
             or "crunch" in normed
-            or "scissors" in normed
+            or "scissor" in normed
+            or "smothe" in normed
+            or "slice" in normed
             or "compression" in normed
             or "opener" in normed
             or "stretch" in normed
+            or "darce" in normed
             or "d'arce" in normed
             or "cravat" in normed
             or "pressure" in normed
@@ -748,8 +746,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "necktie" in normed
             or "neck tie" in normed
             or "windshield" in normed
-            or "smother" in normed
-            or "slicer" in normed
+            or "calf crush" in normed
             or "anaconda" in normed
             or "cholke" in normed
             or "choque" in normed
@@ -777,9 +774,12 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "disquali" in normed
             or "liability" in normed
             or "forbidden" in normed
+            or "ignored" in normed
             or "dq'ed" in normed
             or "fish hook" in normed
             or "infraction" in normed
+            or "inappropriate" in normed
+            or "missed" in normed
             or "low blow" in normed
             or "eye goug" in normed
             or "eye poke" in normed
@@ -789,7 +789,10 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "thrown out of" in normed
             or "answer the bell" in normed
             or "answer bell" in normed
-            or ("grab" in normed and ("rope" in normed or "cage" in normed))
+            or (
+                "grab" in normed
+                and ("rope" in normed or "cage" in normed or "fence" in normed)
+            )
             or ("attack" in normed and "between rounds" in normed)
             or ("spit" in normed and "mouth" in normed)
             or "unanswered" in normed
@@ -797,7 +800,6 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "intentional" in normed
             or "bad position" in normed
             or "interference" in normed
-            or "fence grabbing" in normed
             or "headbut" in normed
             or "groin" in normed
             or "biting" in normed
@@ -816,17 +818,17 @@ def infer_method(sport: str, status: str, note: str) -> str:
         # Doctor
         if (
             normed in ["cut", "cut stoppage", "torn bicep", "leg split"]
-            or ("doc" in normed and "sto" in normed)
+            or (("doc" in normed or "dr." in normed) and "sto" in normed)
+            or "doctor" in normed
             or "medical" in normed
             or "injur" in normed
             or "inkur" in normed
-            or "dr." in normed
             or "broken" in normed
             or "hematoma" in normed
             or "pain on" in normed
             or "due to cut" in normed
             or "shin cut" in normed
-            or "forehead cut" in normed
+            or ("cut" in normed and "head" in normed)
             or "cut on" in normed
             or "cut to" in normed
             or "bleeding" in normed
@@ -847,17 +849,18 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 "exhaustion",
                 "fatigue",
                 "refusal",
-                "timidity",
             ]
-            or "retire" in normed
+            or "retir" in normed
             or "reitre" in normed
             or "abandon" in normed
             or "quit" in normed
             or "exit" in normed
+            or "timidity" in normed
             or ("didn" in normed and "enter" in normed)
             or "refusal to" in normed
             or "refused to" in normed
             or "unable to" in normed
+            or "could not" in normed
             or "leaving" in normed
             or "running from" in normed
             or "ran into" in normed
