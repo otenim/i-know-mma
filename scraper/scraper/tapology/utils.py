@@ -565,27 +565,6 @@ def infer_method(sport: str, status: str, note: str) -> str:
     if sport != consts.SPORT_MMA:
         return consts.METHOD_UNKNOWN
 
-    if (
-        normed
-        in [
-            "other",
-            "`",
-            "efective",
-            "outrigger",
-            "should of justice",
-            "re",
-            "unknown",
-            "lost points",
-            "r",
-            "p",
-            "t",
-            "socos",
-            "paul asmar",
-        ]
-        or "organizer" in normed
-    ):
-        return consts.METHOD_UNKNOWN
-
     # Overturned
     if (
         normed in ["referee error"]
@@ -638,7 +617,6 @@ def infer_method(sport: str, status: str, note: str) -> str:
             return consts.METHOD_TIMELIMIT
         if "exhibit" in normed:
             return consts.METHOD_EXHIBITION
-        raise errors.CantInferMethodError(note)
 
     # Draw
     if status == consts.STATUS_DRAW:
@@ -902,8 +880,8 @@ def infer_method(sport: str, status: str, note: str) -> str:
         # Corner
         if (
             normed in ["second's refusal", "corner withdrawal", "refusal of the second"]
-            or "corner stoppage" in normed
             or "towel" in normed
+            or "corner stop" in normed
         ):
             return consts.METHOD_CORNER_STOPPAGE
 
@@ -945,7 +923,6 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 "refusal",
             ]
             or "retir" in normed
-            or "reitre" in normed
             or "abandon" in normed
             or "quit" in normed
             or "exit" in normed
@@ -960,6 +937,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "ran into" in normed
             or "come out" in normed
             or "came out" in normed
+            or "reitr" in normed
         ):
             return consts.METHOD_RETIREMENT
 
