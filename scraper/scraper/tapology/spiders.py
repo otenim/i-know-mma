@@ -408,7 +408,7 @@ class FightersSpider(scrapy.Spider):
                         )
                         continue
                     try:
-                        summary = parse_match_summary(match_summary)
+                        summary = parse_match_summary(item["sport"], match_summary)
                         for k, v in summary.items():
                             if k != "status":
                                 item[k] = v
@@ -464,7 +464,15 @@ class FightersSpider(scrapy.Spider):
                                         weight_summary
                                     )
                                 except errors.InvalidWeightSummaryPatternError as e:
-                                    self.logger.error(e)
+                                    pattern = normalize_text(e.pattern)
+                                    if (
+                                        "open" in pattern
+                                        or "catch" in pattern
+                                        or "numeric" in pattern
+                                    ):
+                                        pass
+                                    else:
+                                        self.logger.error(e)
                         elif label == "odds:":
                             # Odds of the fighter
                             odds = label_section.xpath(
