@@ -291,6 +291,15 @@ def parse_match_summary(sport: str, match_summary: str) -> Dict:
                     "method": infer_method(sport, status, note),
                 }
         elif n == 2:
+            # Win|Loss|Draw|No Contest · R3
+            matched = re.match(r"^(win|loss|draw|no contest) · (r\d+)$", normed)
+            if matched is not None:
+                return {
+                    "status": status,
+                    "round": parse_round(matched.group(2)),
+                    "method": consts.METHOD_UNKNOWN,
+                }
+
             # Win|Loss|Draw · Decision
             # Win|Loss · KO/TKO
             # Draw · Unanimous|Majority|Split
@@ -302,18 +311,9 @@ def parse_match_summary(sport: str, match_summary: str) -> Dict:
                     "status": status,
                     "method": infer_method(sport, status, note),
                 }
-            # No Contest · R3
-            matched = re.match(r"^no contest · (r\d+)$", normed)
-            if matched is not None:
-                return {
-                    "status": status,
-                    "round": parse_round(matched.group(1)),
-                }
         elif n == 1:
             # Win|Loss|Draw|No Contest
-            return {
-                "status": status,
-            }
+            return {"status": status, "method": consts.METHOD_UNKNOWN}
     except (
         errors.InvalidRoundTimePatternError,
         errors.InvalidRoundPatternError,
@@ -634,6 +634,10 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "head of" in normed
         ):
             return consts.METHOD_ACCIDENTAL
+        if "time limit" in normed:
+            return consts.METHOD_TIMELIMIT
+        if "exhibit" in normed:
+            return consts.METHOD_EXHIBITION
         raise errors.CantInferMethodError(note)
 
     # Draw
@@ -643,7 +647,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
     # Win/Loss
     if status in [consts.STATUS_WIN, consts.STATUS_LOSS]:
         # Decision
-        if normed == "unanimous":
+        if normed in ["unanimous", "decision · un"]:
             return consts.METHOD_DEC_UNANIMOUS
         if normed == "majority":
             return consts.METHOD_DEC_MAJORITY
@@ -775,6 +779,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             in [
                 "kumura",
                 "kmura",
+                "rnc",
                 "banana split",
                 "whizzer",
                 "chin in the eye",
@@ -822,6 +827,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "d'arce" in normed
             or "cravat" in normed
             or "pressure" in normed
+            or "python" in normed
             or "plata" in normed
             or "necktie" in normed
             or "neck tie" in normed
@@ -829,6 +835,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "calf crush" in normed
             or "anaconda" in normed
             or "cholke" in normed
+            or "chole" in normed
             or "choque" in normed
             or "crucifix" in normed
             or "butt scoot" in normed
@@ -951,7 +958,8 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "leaving" in normed
             or "running from" in normed
             or "ran into" in normed
-            or "never came out" in normed
+            or "come out" in normed
+            or "came out" in normed
         ):
             return consts.METHOD_RETIREMENT
 

@@ -126,7 +126,7 @@ STATUSES = [
 
 # Ending Method
 METHOD_KO_TKO = "ko/tko"
-METHOD_SUBMISSION = "sub"
+METHOD_SUBMISSION = "submission"
 METHOD_RETIREMENT = "retire"
 METHOD_FORFEIT = "forfeit"
 METHOD_CORNER_STOPPAGE = "corner_stoppage"
@@ -140,7 +140,8 @@ METHOD_DEC_SPLIT = "dec_split"
 METHOD_DEC_TECHNICAL = "dec_technical"
 METHOD_DEC_POINTS = "dec_points"
 METHOD_DEC = "dec"
-METHOD_NC = "nc"
+METHOD_TIMELIMIT = "timelimit"
+METHOD_EXHIBITION = "exhibition"
 METHOD_ACCIDENTAL = "accidental"
 METHOD_DOUBLE_KO = "double_ko"
 METHOD_WINONLY = "winonly"
