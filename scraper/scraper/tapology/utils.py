@@ -565,15 +565,15 @@ def infer_method(sport: str, status: str, note: str) -> str:
         in [
             "other",
             "`",
-            "stoppage",
             "efective",
             "outrigger",
             "should of justice",
             "re",
             "unknown",
             "lost points",
-            "R",
-            "P",
+            "r",
+            "p",
+            "socos",
             "paul asmar",
         ]
         or "organizer" in normed
@@ -595,12 +595,14 @@ def infer_method(sport: str, status: str, note: str) -> str:
     # Win/Loss
     if status in [consts.STATUS_WIN, consts.STATUS_LOSS]:
         # Decision
-        if note == "unanimous":
+        if normed == "unanimous":
             return consts.METHOD_DEC_UNANIMOUS
-        if note == "majority":
+        if normed == "majority":
             return consts.METHOD_DEC_MAJORITY
-        if note == "split":
+        if normed == "split":
             return consts.METHOD_DEC_SPLIT
+        if normed == "decision":
+            return consts.METHOD_DEC
         if "decision" in normed:
             if "unanimous" in normed:
                 return consts.METHOD_DEC_UNANIMOUS
@@ -608,7 +610,26 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 return consts.METHOD_DEC_MAJORITY
             if "split" in normed or "spilt" in normed or "spit" in normed:
                 return consts.METHOD_DEC_SPLIT
-            return consts.METHOD_DEC
+            if (
+                "technical" in normed
+                or "referee" in normed
+                or "illegal" in normed
+                or "medic" in normed
+                or "injur" in normed
+            ):
+                return consts.METHOD_DEC_TECHNICAL
+            if "points" in normed:
+                return consts.METHOD_DEC_POINTS
+            if "extra" in normed or "extension" in normed:
+                return consts.METHOD_DEC
+            # Not decision (wrong source)
+            if "walk over" in normed or "forfeit" in normed:
+                return consts.METHOD_FORFEIT
+            if "choke" in normed or "armbar" in normed:
+                return consts.METHOD_SUBMISSION
+            if "tko" in normed:
+                return consts.METHOD_KO_TKO
+            raise errors.CantInferMethodError(note)
 
         # KO/TKO
         if (
@@ -638,6 +659,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 "technical",
                 "ground",
                 "strkes",
+                "stoppage",
                 "wave off",
                 "check hook",
             ]
@@ -804,6 +826,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "groin" in normed
             or "biting" in normed
             or "unsportsman" in normed
+            or "fighting after stop" in normed
         ):
             return consts.METHOD_DQ
 
@@ -829,6 +852,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "due to cut" in normed
             or "shin cut" in normed
             or ("cut" in normed and "head" in normed)
+            or "cut from" in normed
             or "cut on" in normed
             or "cut to" in normed
             or "bleeding" in normed
