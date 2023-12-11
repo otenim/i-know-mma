@@ -616,6 +616,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 or "illegal" in normed
                 or "medic" in normed
                 or "injur" in normed
+                or "doctor" in normed
             ):
                 return consts.METHOD_DEC_TECHNICAL
             if "points" in normed:
@@ -629,7 +630,12 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 return consts.METHOD_CORNER_STOPPAGE
             if "choke" in normed or "armbar" in normed:
                 return consts.METHOD_SUBMISSION
-            if "tko" in normed or "punches" in normed or "strikes" in normed:
+            if (
+                "tko" in normed
+                or "punches" in normed
+                or "strikes" in normed
+                or "pound" in normed
+            ):
                 return consts.METHOD_KO_TKO
             raise errors.CantInferMethodError(note)
 
@@ -832,7 +838,8 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "groin" in normed
             or "biting" in normed
             or "unsportsman" in normed
-            or "fighting after stop" in normed
+            or "attack after" in normed
+            or "fighting after" in normed
         ):
             return consts.METHOD_DQ
 
