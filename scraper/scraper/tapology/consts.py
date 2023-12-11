@@ -125,21 +125,23 @@ STATUSES = [
 
 
 # Ending Method
-ENDING_METHOD_KO_TKO = "ko/tko"
-ENDING_METHOD_SUBMISSION = "submission"
-ENDING_METHOD_DISQUALIFICATION = "disqualification"
-ENDING_METHOD_DECISION_UNANIMOUS = "decision_unanimous"
-ENDING_METHOD_DECISION_MAJORITY = "decision_majority"
-ENDING_METHOD_DECISION_SPLIT = "decision_split"
-ENDING_METHOD_DECISION_UNKNOWN = "decision_unknown"
-ENDING_METHOD_DRAW_UNANIMOUS = "draw_unanimous"
-ENDING_METHOD_DRAW_MAJORITY = "draw_majority"
-ENDING_METHOD_DRAW_SPLIT = "draw_split"
-ENDING_METHOD_DRAW_UNKNOWN = "draw_unknown"
-ENDING_METHOD_NO_CONTEST_ACCIDENTAL = "no_contest_accidental"
-ENDING_METHOD_NO_CONTEST_UNKNOWN = "no_contest_unknown"
-ENDING_METHOD_OVERTURNED = "overturned"
-ENDING_METHOD_UNKNOWN = "unknown"
+METHOD_KO_TKO = "ko/tko"
+METHOD_SUBMISSION = "submission"
+METHOD_ACCIDENTAL = "accidental"
+METHOD_DQ = "dq"
+METHOD_WALKOVER = "walkover"
+METHOD_IPPON = "ippon"
+METHOD_DECISION_UNANIMOUS = "decision_unanimous"
+METHOD_DECISION_MAJORITY = "decision_majority"
+METHOD_DECISION_SPLIT = "decision_split"
+METHOD_DECISION_POINT = "decision_point"
+METHOD_DECISION_TIMELIMIT = "decision_timelimit"
+METHOD_DECISION_TECHNICAL = "decision_technical"
+METHOD_DECISION_MEDICAL = "decision_medical"
+METHOD_DECISION_RETIREMENT = "decision_retirement"
+METHOD_DECISION_GENERAL = "decision"
+METHOD_OVERTURNED = "overturned"
+METHOD_UNKNOWN = "unknown"
 
 
 # Round Format Types

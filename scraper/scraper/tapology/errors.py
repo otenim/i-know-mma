@@ -71,3 +71,8 @@ class InvalidRoundFormatPatternError(Exception):
 class InvalidLastWeighInPatternError(Exception):
     def __init__(self, pattern: str) -> None:
         super().__init__(f"invalid last weigh-in pattern: {pattern}")
+
+
+class CantInferMethodError(Exception):
+    def __init__(self, input: str) -> None:
+        super().__init__(f"cannot infer method: {input}")

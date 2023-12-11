@@ -227,7 +227,10 @@ def parse_match_summary(match_summary: str) -> Dict:
     try:
         status = normalize_status(normed_split[0])
     except errors.InvalidStatusValueError as e:
-        return {"method": infer_ending_method(normed_split[0])}
+        try:
+            return {"method": infer_method(normed_split[0])}
+        except errors.CantInferMethodError as e:
+            raise errors.InvalidMatchSummaryPatternError(match_summary)
     normed = " · ".join(normed_split)
     n = len(normed_split)
     try:
@@ -241,13 +244,12 @@ def parse_match_summary(match_summary: str) -> Dict:
                 r"^(win|loss|draw|no contest) · ([^·]+) · (\d+:\d+) · (r\d+)$", normed
             )
             if matched is not None:
-                supplemental = matched.group(2)
+                note = matched.group(2)
                 return {
                     "status": status,
                     "time": parse_round_time(matched.group(3)),
                     "round": parse_round(matched.group(4)),
-                    "method": infer_ending_method(supplemental, status),
-                    "supplemental": supplemental,
+                    "method": infer_method(note),
                 }
         elif n == 3:
             # Win|Loss|Draw · Decision · Unanimous|Majority|Split
@@ -256,11 +258,10 @@ def parse_match_summary(match_summary: str) -> Dict:
                 normed,
             )
             if matched is not None:
-                supplemental = matched.group(2)
+                note = matched.group(2)
                 return {
                     "status": status,
-                    "method": infer_ending_method(supplemental, status),
-                    "supplemental": supplemental,
+                    "method": infer_method(note),
                 }
             # Win|Loss · Flying Knee & Punches · R1
             # Draw · Washington Elbowed in Back of Head · R1
@@ -269,12 +270,11 @@ def parse_match_summary(match_summary: str) -> Dict:
                 r"^(win|loss|draw|no contest) · ([^·]+) · (r\d+)$", normed
             )
             if matched is not None:
-                supplemental = matched.group(2)
+                note = matched.group(2)
                 return {
                     "status": status,
                     "round": parse_round(matched.group(3)),
-                    "method": infer_ending_method(supplemental, status),
-                    "supplemental": supplemental,
+                    "method": infer_method(note),
                 }
             # No Contest · 3:15 · R1
             matched = re.match(r"^no contest · (\d+:\d+) · (r\d+)$", normed)
@@ -283,7 +283,6 @@ def parse_match_summary(match_summary: str) -> Dict:
                     "status": status,
                     "time": parse_round_time(matched.group(1)),
                     "round": parse_round(matched.group(2)),
-                    "method": consts.ENDING_METHOD_NO_CONTEST_UNKNOWN,
                 }
         elif n == 2:
             # Win|Loss|Draw · Decision
@@ -292,11 +291,10 @@ def parse_match_summary(match_summary: str) -> Dict:
             # No Contest · Accidental Illegal Elbow
             matched = re.match(r"^(win|loss|draw|no contest) · (.+)$", normed)
             if matched is not None:
-                supplemental = matched.group(2)
+                note = matched.group(2)
                 return {
                     "status": status,
-                    "method": infer_ending_method(supplemental, status),
-                    "supplemental": supplemental,
+                    "method": infer_method(note),
                 }
             # No Contest · R3
             matched = re.match(r"^no contest · (r\d+)$", normed)
@@ -304,22 +302,17 @@ def parse_match_summary(match_summary: str) -> Dict:
                 return {
                     "status": status,
                     "round": parse_round(matched.group(1)),
-                    "method": consts.ENDING_METHOD_NO_CONTEST_UNKNOWN,
                 }
         elif n == 1:
             # Win|Loss|Draw|No Contest
             return {
                 "status": status,
-                "method": consts.ENDING_METHOD_DRAW_UNKNOWN
-                if status == consts.STATUS_DRAW
-                else consts.ENDING_METHOD_NO_CONTEST_UNKNOWN
-                if status == consts.STATUS_NC
-                else consts.ENDING_METHOD_UNKNOWN,
             }
     except (
         errors.InvalidRoundTimePatternError,
         errors.InvalidRoundPatternError,
         errors.InvalidStatusValueError,
+        errors.CantInferMethodError,
     ) as e:
         raise errors.InvalidMatchSummaryPatternError(match_summary)
     raise errors.InvalidMatchSummaryPatternError(match_summary)
@@ -561,79 +554,180 @@ def to_kg(value: float, unit: str = "lb") -> float:
     return value
 
 
-def infer_ending_method(supplemental: str, status: Optional[str] = None) -> str:
-    supplemental = normalize_text(supplemental)
-    if status is None:
-        # Result Overturned
-        if "overturned" in supplemental:
-            return consts.ENDING_METHOD_OVERTURNED
-    else:
-        status = normalize_status(status)
-        if status not in [
-            consts.STATUS_WIN,
-            consts.STATUS_LOSS,
-            consts.STATUS_DRAW,
-            consts.STATUS_NC,
-        ]:
-            raise ValueError(
-                f"unexpected status: {status} (one of {consts.STATUS_WIN}, {consts.STATUS_LOSS}, {consts.STATUS_DRAW} or {consts.STATUS_NC} is expected)"
-            )
-        # Win|Loss
-        if status in [consts.STATUS_WIN, consts.STATUS_LOSS]:
-            # Decision
-            if "decision" in supplemental:
-                if "unanimous" in supplemental:
-                    return consts.ENDING_METHOD_DECISION_UNANIMOUS
-                if "majority" in supplemental:
-                    return consts.ENDING_METHOD_DECISION_MAJORITY
-                if (
-                    "split" in supplemental
-                    or "spilt" in supplemental
-                    or "spit" in supplemental
-                ):
-                    return consts.ENDING_METHOD_DECISION_SPLIT
-                return consts.ENDING_METHOD_DECISION_UNKNOWN
-            # Disqualification
-            if (
-                "illegal" in supplemental
-                or "disqualification" in supplemental
-                or "dq" in supplemental
-            ):
-                return consts.ENDING_METHOD_DISQUALIFICATION
-            # KO/TKO
-            if (
-                "ko/tko" in supplemental
-                or "knockdown" in supplemental
-                or "kick" in supplemental
-                or "punch" in supplemental
-                or "elbow" in supplemental
-                or "stoppage" in supplemental
-                or "cut" in supplemental
-                or "retirement" in supplemental
-                or "pound" in supplemental
-                or "strike" in supplemental
-                or "towel" in supplemental
-                or "slam" in supplemental
-                or "fist" in supplemental
-                or supplemental == "knee"
-            ):
-                return consts.ENDING_METHOD_KO_TKO
-            # Submission
-            return consts.ENDING_METHOD_SUBMISSION
-        # Draw
-        if status == consts.STATUS_DRAW:
-            if "unanimous" in supplemental:
-                return consts.ENDING_METHOD_DRAW_UNANIMOUS
-            if "majority" in supplemental:
-                return consts.ENDING_METHOD_DRAW_MAJORITY
-            if (
-                "split" in supplemental
-                or "spilt" in supplemental
-                or "spit" in supplemental
-            ):
-                return consts.ENDING_METHOD_DRAW_SPLIT
-            return consts.ENDING_METHOD_DRAW_UNKNOWN
-        # No contest
-        if "accidental" in supplemental:
-            return consts.ENDING_METHOD_NO_CONTEST_ACCIDENTAL
-    return consts.ENDING_METHOD_NO_CONTEST_UNKNOWN
+def infer_method(note: str) -> str:
+    normed = normalize_text(note)
+    # Overturned
+    if "overturned" in normed:
+        return consts.METHOD_OVERTURNED
+    # Decision
+    if "decision" in normed:
+        if normed == "decision" or normed == "decision · draw":
+            return consts.METHOD_DECISION_GENERAL
+        if "unanimous" in normed:
+            return consts.METHOD_DECISION_UNANIMOUS
+        if "majority" in normed:
+            return consts.METHOD_DECISION_MAJORITY
+        if "split" in normed or "spilt" in normed or "spit" in normed:
+            return consts.METHOD_DECISION_SPLIT
+        if "point" in normed:
+            return consts.METHOD_DECISION_POINT
+        if "time limit" in normed:
+            return consts.METHOD_DECISION_TIMELIMIT
+        if "technical" in normed or "referee" in normed or "illegal" in normed:
+            return consts.METHOD_DECISION_TECHNICAL
+        if "medical" in normed or "injury" in normed or "doctor":
+            return consts.METHOD_DECISION_MEDICAL
+        if "retirement" in normed:
+            return consts.METHOD_DECISION_RETIREMENT
+    if normed == "unanimous":
+        return consts.METHOD_DECISION_UNANIMOUS
+    if normed == "majority":
+        return consts.METHOD_DECISION_MAJORITY
+    if normed == "split":
+        return consts.METHOD_DECISION_SPLIT
+
+    # Illegal
+    if (
+        "illegal" in normed
+        or "disquali" in normed
+        or "foul" in normed
+        or "headbutt" in normed
+        or "groin" in normed
+        or "low blow" in normed
+        or "eye poke" in normed
+        or "forfeit" in normed
+        or "ropes" in normed
+        or "drug" in normed
+        or "fence grabbing" in normed
+        or "language" in normed
+        or "unanswered" in normed
+        or "dropped on head" in normed
+        or "liability" in normed
+        or "interference" in normed
+        or "refused" in normed
+        or "refusal" in normed
+        or "didn't" in normed
+        or "did not" in normed
+        or "answer the bell" in normed
+        or "finger in the eye" in normed
+        or "missed" in normed
+        or "misswed" in normed
+        or "unsportsman" in normed
+    ):
+        return consts.METHOD_DQ
+
+    # Accidental
+    if (
+        normed in ["referee & judging errors"]
+        or "accidental" in normed
+        or "malfunction" in normed
+        or "both fighters" in normed
+    ):
+        return consts.METHOD_ACCIDENTAL
+
+    # Walkover (bjj)
+    if normed in ["walkover", "walk over"]:
+        return consts.METHOD_WALKOVER
+
+    # Ippon
+    if "ippon" in normed:
+        return consts.METHOD_IPPON
+
+    # KO/TKO
+    if (
+        normed
+        in ["ko", "knee", "knee", "hook", "cut", "cuts", "forehead cut", "standing"]
+        or "tko" in normed
+        or "ko/tko" in normed
+        or "knockdown" in normed
+        or "knock down" in normed
+        or "knock out" in normed
+        or "knockout" in normed
+        or "knee to" in normed
+        or "kick" in normed
+        or "punch" in normed
+        or "elbow" in normed
+        or "hooks" in normed
+        or "pound" in normed
+        or "suplex" in normed
+        or "liver" in normed
+        or "knees" in normed
+        or "overhand" in normed
+        or "straight" in normed
+        or "stomp" in normed
+        or "strike" in normed
+        or "slam" in normed
+        or "fist" in normed
+        or "body" in normed
+        or "jab" in normed
+        or "cut to" in normed
+        or "cut from" in normed
+        or "cut on" in normed
+        or "upper" in normed
+        or "technical" in normed
+        or "counter" in normed
+        or "injury" in normed
+        or "dislocated" in normed
+        or "medical" in normed
+        or "broken" in normed
+        or "uppercut" in normed
+        or "flying knee" in normed
+        or "ground knee" in normed
+        or "t hand" in normed
+        or "t hook" in normed
+        or "t cross" in normed
+        or "t knee" in normed
+        or "towel" in normed
+        or "retire" in normed
+        or "abandon" in normed
+        or "stoppage" in normed
+        or "referee stop" in normed
+        or "exhaustion" in normed
+        or "painful" in normed
+        or "vomit" in normed
+    ):
+        return consts.METHOD_KO_TKO
+    # Submission
+    if (
+        "tapout" in normed
+        or "tap out" in normed
+        or "submission" in normed
+        or "lock" in normed
+        or "hold" in normed
+        or "bar" in normed
+        or "verbal" in normed
+        or "triangle" in normed
+        or "guillotine" in normed
+        or "choke" in normed
+        or "crank" in normed
+        or "crunch" in normed
+        or "opener" in normed
+        or "stretch" in normed
+        or "kimura" in normed
+        or "twister" in normed
+        or "d'arce" in normed
+        or "crossface" in normed
+        or "cross face" in normed
+        or "pressure" in normed
+        or "necktie" in normed
+        or "smother" in normed
+        or "neck tie" in normed
+        or "katagatame" in normed
+        or "calf slicer" in normed
+        or "americana" in normed
+        or "anaconda" in normed
+        or "heelhook" in normed
+        or "heel hook" in normed
+        or "banana split" in normed
+        or "cranck" in normed
+        or "cholke" in normed
+        or "kumura" in normed
+        or "gogoplata" in normed
+        or "monoplata" in normed
+        or "omo plata" in normed
+        or "omoplata" in normed
+        or "omplata" in normed
+        or "omaplata" in normed
+    ):
+        return consts.METHOD_SUBMISSION
+    raise errors.CantInferMethodError(note)
