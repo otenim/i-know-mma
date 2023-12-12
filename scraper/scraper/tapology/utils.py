@@ -548,11 +548,27 @@ def infer_method(sport: str, status: str, note: str) -> str:
     if sport != consts.SPORT_MMA:
         return consts.METHOD_UNKNOWN
 
+    if status == consts.STATUS_DRAW:
+        if normed == "draw":
+            return consts.METHOD_UNKNOWN
+        if "decision" in normed or normed in ["unanimous", "majority", "split"]:
+            return consts.METHOD_DECISION
+        if "time limit" in normed:
+            return consts.METHOD_TIMELIMIT
+        if (
+            "illegal" in normed
+            or "accident" in normed
+            or "unsportsman" in normed
+            or "disq" in normed
+        ):
+            return consts.METHOD_FOUL
+        raise InferError("method", note)
+
     if status == consts.STATUS_NC:
+        if normed in ["nc", "no contest"]:
+            return consts.METHOD_UNKNOWN
         if "drug" in normed or "doping" in normed or "inhaler" in normed:
             return consts.METHOD_DOPING
-        if "double" in normed or "fighters" in normed:
-            return consts.METHOD_BOTH
         if "overturn" in normed:
             return consts.METHOD_OVERTURNED
         if "weight" in normed:
@@ -561,8 +577,18 @@ def infer_method(sport: str, status: str, note: str) -> str:
             return consts.METHOD_TIMELIMIT
         if "exhibit" in normed:
             return consts.METHOD_EXHIBITION
-        if normed in ["fight stopped due to rain"]:
-            return consts.METHOD_INCIDENT
+        if (
+            normed
+            in [
+                "fight stopped due to rain",
+                "fight ended early due to lightning",
+                "canvas too slippery to continue",
+            ]
+            or "power outage" in normed
+        ):
+            return consts.METHOD_OUTSIDE_INCIDENT
+        if "both" in normed:
+            return consts.METHOD_BOTH
         if (
             "error" in normed
             or "mistake" in normed
@@ -604,7 +630,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "over fight length" in normed
             or "after the bell" in normed
         ):
-            return consts.METHOD_ILLEGAL
+            return consts.METHOD_FOUL
         if (
             normed in ["cut"]
             or "injur" in normed
@@ -613,6 +639,25 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "due to cut" in normed
             or "cut from" in normed
         ):
-            return consts.METHOD_INJURY
+            return consts.METHOD_STOPPAGE_DOCTOR
+        if (
+            normed in [""]
+            or "unanimous" in normed
+            or "majority" in normed
+            or "split" in normed
+        ):
+            return consts.METHOD_UNKNOWN
+        if (
+            normed in ["knee", "refusal"]
+            or "strikes" in normed
+            or "punches" in normed
+            or "right" in normed
+            or "left" in normed
+            or "kick" in normed
+            or "choke" in normed
+            or "lock" in normed
+            or "armbar" in normed
+        ):
+            return consts.METHOD_OVERWEIGHT
         raise InferError("method", note)
     return consts.METHOD_UNKNOWN
