@@ -218,19 +218,15 @@ def parse_round(round: str) -> int:
     raise ParseError("round", round)
 
 
-def parse_match_summary(sport: str, match_summary: str) -> dict:
+def parse_match_summary(sport: str, status: str, match_summary: str) -> dict:
     sport = normalize_sport(sport)
-    normed = normalize_text(match_summary)
+    status = normalize_status(status)
     normed_split = list(
-        filter(lambda x: x != "", list(map(lambda x: x.strip(), normed.split("·"))))
+        filter(
+            lambda x: x != "",
+            list(map(lambda x: x.strip(), normalize_text(match_summary).split("·"))),
+        )
     )
-    try:
-        status = normalize_status(normed_split[0])
-    except NormalizeError:
-        try:
-            return {"method": infer_method(sport, normed_split[0], "")}
-        except:
-            raise ParseError("match summary", match_summary)
     normed = " · ".join(normed_split)
     n = len(normed_split)
     try:
@@ -241,78 +237,72 @@ def parse_match_summary(sport: str, match_summary: str) -> dict:
             # Draw · Draw · 5:00 · R2
             # Draw · Majority · 3:00 · R3
             matched = re.match(
-                r"^(win|loss|draw|no contest) · ([^·]+) · (\d+:\d+) · (r\d+)$", normed
+                r"^(?:win|loss|draw|no contest) · ([^·]+) · (\d+:\d+) · (r\d+)$", normed
             )
             if matched is not None:
-                note = matched.group(2)
-                return {
-                    "status": status,
-                    "time": parse_round_time(matched.group(3)),
-                    "round": parse_round(matched.group(4)),
-                    "method": infer_method(sport, status, note),
-                }
-        elif n == 3:
-            # Win|Loss|Draw · Decision · Unanimous|Majority|Split
-            matched = re.match(
-                r"^(win|loss|draw) · (decision · .+)$",
-                normed,
-            )
-            if matched is not None:
-                note = matched.group(2)
-                return {
-                    "status": status,
-                    "method": infer_method(sport, status, note),
-                }
-
-            # Win|Loss|Draw|No Contest · 3:15 · R1
-            matched = re.match(
-                r"^(win|loss|draw|no contest) · (\d+:\d+) · (r\d+)$", normed
-            )
-            if matched is not None:
+                note = matched.group(1)
                 return {
                     "status": status,
                     "time": parse_round_time(matched.group(2)),
                     "round": parse_round(matched.group(3)),
-                    "method": consts.METHOD_UNKNOWN,
+                }
+        elif n == 3:
+            # Win|Loss|Draw · Decision · Unanimous|Majority|Split
+            matched = re.match(
+                r"^(?:win|loss|draw) · (decision · .+)$",
+                normed,
+            )
+            if matched is not None:
+                note = matched.group(1)
+                return {
+                    "status": status,
+                }
+
+            # Win|Loss|Draw|No Contest · 3:15 · R1
+            matched = re.match(
+                r"^(?:win|loss|draw|no contest) · (\d+:\d+) · (r\d+)$", normed
+            )
+            if matched is not None:
+                return {
+                    "status": status,
+                    "time": parse_round_time(matched.group(1)),
+                    "round": parse_round(matched.group(2)),
                 }
 
             # Win|Loss · Flying Knee & Punches · R1
             # Draw · Washington Elbowed in Back of Head · R1
             # No Contest · Accidental Illegal Knee · R1
             matched = re.match(
-                r"^(win|loss|draw|no contest) · ([^·]+) · (r\d+)$", normed
+                r"^(?:win|loss|draw|no contest) · ([^·]+) · (r\d+)$", normed
             )
             if matched is not None:
-                note = matched.group(2)
-                return {
-                    "status": status,
-                    "round": parse_round(matched.group(3)),
-                    "method": infer_method(sport, status, note),
-                }
-        elif n == 2:
-            # Win|Loss|Draw|No Contest · R3
-            matched = re.match(r"^(win|loss|draw|no contest) · (r\d+)$", normed)
-            if matched is not None:
+                note = matched.group(1)
                 return {
                     "status": status,
                     "round": parse_round(matched.group(2)),
-                    "method": consts.METHOD_UNKNOWN,
+                }
+        elif n == 2:
+            # Win|Loss|Draw|No Contest · R3
+            matched = re.match(r"^(?:win|loss|draw|no contest) · (r\d+)$", normed)
+            if matched is not None:
+                return {
+                    "status": status,
+                    "round": parse_round(matched.group(1)),
                 }
 
             # Win|Loss|Draw · Decision
             # Win|Loss · KO/TKO
             # Draw · Unanimous|Majority|Split
             # No Contest · Accidental Illegal Elbow
-            matched = re.match(r"^(win|loss|draw|no contest) · (.+)$", normed)
+            matched = re.match(r"^(?:win|loss|draw|no contest) · (.+)$", normed)
             if matched is not None:
-                note = matched.group(2)
+                note = matched.group(1)
                 return {
                     "status": status,
-                    "method": infer_method(sport, status, note),
                 }
         elif n == 1:
             # Win|Loss|Draw|No Contest
-            return {"status": status, "method": consts.METHOD_UNKNOWN}
+            return {"status": status}
     except (
         NormalizeError,
         ParseError,

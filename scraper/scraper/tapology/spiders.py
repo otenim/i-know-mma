@@ -411,7 +411,9 @@ class FightersSpider(scrapy.Spider):
                         )
                         continue
                     try:
-                        summary = parse_match_summary(item["sport"], match_summary)
+                        summary = parse_match_summary(
+                            item["sport"], item["status"], match_summary
+                        )
                         for k, v in summary.items():
                             if k != "status":
                                 item[k] = v
