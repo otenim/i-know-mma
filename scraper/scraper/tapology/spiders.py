@@ -415,8 +415,7 @@ class FightersSpider(scrapy.Spider):
                             item["sport"], item["status"], match_summary
                         )
                         for k, v in summary.items():
-                            if k != "status":
-                                item[k] = v
+                            item[k] = v
                     except ParseError as e:
                         self.logger.error(e)
 
