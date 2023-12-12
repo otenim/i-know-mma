@@ -1,8 +1,9 @@
 import scrapy
 import re
-from scrapy.http import TextResponse
+from scrapy.http import TextResponse, Request
+from collections.abc import Generator
 from . import consts
-from . import errors
+from .errors import NormalizeError, ParseError
 from .utils import (
     normalize_text,
     normalize_sport,
@@ -32,21 +33,23 @@ class FightersSpider(scrapy.Spider):
         ignore_am_mma_fighters: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> None:
         super(FightersSpider, self).__init__(*args, **kwargs)
         if min_mma_matches < 0:
             raise ValueError(f"min_mma_matches expects >= 0 but {min_mma_matches}")
         self.min_mma_matches = min_mma_matches
         self.ignore_am_mma_fighters = ignore_am_mma_fighters
 
-    def parse(self, response: TextResponse):
+    def parse(self, response: TextResponse) -> Generator[Request, None, None]:
         urls = response.xpath(
             "//div[@class='siteSearchFightersByWeightClass']/dd/a/@href"
         ).getall()
         for url in urls:
             yield response.follow(url, callback=self.parse_fighter_list)
 
-    def parse_fighter_list(self, response: TextResponse):
+    def parse_fighter_list(
+        self, response: TextResponse
+    ) -> Generator[Request, None, None]:
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
         for fighter in fighters:
             career_record = fighter.xpath("./td[7]/text()").get()
@@ -80,7 +83,7 @@ class FightersSpider(scrapy.Spider):
         if next_url is not None:
             yield response.follow(next_url, callback=self.parse_fighter_list)
 
-    def parse_fighter(self, response: TextResponse):
+    def parse_fighter(self, response: TextResponse) -> dict | None:
         ret = {}
 
         # Fighter ID (must)
@@ -134,7 +137,7 @@ class FightersSpider(scrapy.Spider):
         if career_record is not None:
             try:
                 ret["career_record"] = parse_record(career_record)
-            except errors.InvalidRecordPatternError as e:
+            except ParseError as e:
                 self.logger.error(e)
 
         # Date of birth (optional)
@@ -146,7 +149,7 @@ class FightersSpider(scrapy.Spider):
             if date_of_birth not in consts.VALUES_NOT_AVAILABLE:
                 try:
                     ret["date_of_birth"] = normalize_date(date_of_birth)
-                except errors.InvalidDateValueError as e:
+                except NormalizeError as e:
                     self.logger.error(e)
 
         # Weight class (optional)
@@ -156,7 +159,7 @@ class FightersSpider(scrapy.Spider):
         if weight_class is not None:
             try:
                 ret["weight_class"] = normalize_weight_class(weight_class)
-            except errors.InvalidWeightClassValueError as e:
+            except NormalizeError as e:
                 self.logger.error(e)
 
         # Last weigh-in (optional)
@@ -168,7 +171,7 @@ class FightersSpider(scrapy.Spider):
                 parsed = parse_last_weigh_in(last_weigh_in)
                 if parsed is not None:
                     ret["last_weigh_in"] = parsed
-            except errors.InvalidLastWeighInPatternError as e:
+            except ParseError as e:
                 self.logger.error(e)
 
         # Career disclosed earnings (optional)
@@ -284,7 +287,7 @@ class FightersSpider(scrapy.Spider):
                     continue
                 try:
                     item["sport"] = normalize_sport(sport)
-                except errors.InvalidSportValueError as e:
+                except NormalizeError as e:
                     self.logger.error(e)
                     continue
 
@@ -297,7 +300,7 @@ class FightersSpider(scrapy.Spider):
                     continue
                 try:
                     item["status"] = normalize_status(status)
-                except errors.InvalidStatusValueError as e:
+                except NormalizeError as e:
                     self.logger.error(e)
                     continue
 
@@ -320,7 +323,7 @@ class FightersSpider(scrapy.Spider):
                     continue
                 try:
                     item["date"] = normalize_date(date)
-                except errors.InvalidDateValueError as e:
+                except NormalizeError as e:
                     self.logger.error(e)
                     continue
 
@@ -354,7 +357,7 @@ class FightersSpider(scrapy.Spider):
                 if record is not None:
                     try:
                         item["record"] = parse_record(record)
-                    except errors.InvalidRecordPatternError as e:
+                    except ParseError as e:
                         self.logger.error(e)
 
                 # Promotion of the match (optional)
@@ -412,7 +415,7 @@ class FightersSpider(scrapy.Spider):
                         for k, v in summary.items():
                             if k != "status":
                                 item[k] = v
-                    except errors.InvalidMatchSummaryPatternError as e:
+                    except ParseError as e:
                         self.logger.error(e)
 
                     # More info (optional)
@@ -432,7 +435,7 @@ class FightersSpider(scrapy.Spider):
                             if billing is not None:
                                 try:
                                     item["billing"] = normalize_billing(billing)
-                                except errors.InvalidBillingValueError as e:
+                                except NormalizeError as e:
                                     self.logger.error(e)
                         elif label == "duration:":
                             # Round format of the match
@@ -444,7 +447,7 @@ class FightersSpider(scrapy.Spider):
                                     item["round_format"] = normalize_round_format(
                                         round_format
                                     )
-                                except errors.InvalidRoundFormatValueError as e:
+                                except NormalizeError as e:
                                     self.logger.error(e)
                         elif label == "referee:":
                             # Referee of the match
@@ -463,8 +466,8 @@ class FightersSpider(scrapy.Spider):
                                     item["weight"] = parse_weight_summary(
                                         weight_summary
                                     )
-                                except errors.InvalidWeightSummaryPatternError as e:
-                                    pattern = normalize_text(e.pattern)
+                                except ParseError as e:
+                                    pattern = normalize_text(e.text)
                                     if (
                                         "open" in pattern
                                         or "catch" in pattern
@@ -481,7 +484,7 @@ class FightersSpider(scrapy.Spider):
                             if odds is not None:
                                 try:
                                     item["odds"] = parse_odds(odds)
-                                except errors.InvalidOddsPatternError as e:
+                                except ParseError as e:
                                     self.logger.error(e)
                         elif label == "title bout:":
                             # Title infomation
@@ -491,7 +494,7 @@ class FightersSpider(scrapy.Spider):
                             if title_info is not None:
                                 try:
                                     item["title_info"] = parse_title_info(title_info)
-                                except errors.InvalidTitleInfoPatternError as e:
+                                except ParseError as e:
                                     self.logger.error(e)
                 ret["results"].append(item)
 

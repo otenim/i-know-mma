@@ -1,8 +1,7 @@
 import datetime
 import re
 from . import consts
-from . import errors
-from typing import Union, Optional, Dict
+from .errors import NormalizeError, ParseError, InferError
 
 
 def normalize_text(text: str, lower: bool = True) -> str:
@@ -31,7 +30,7 @@ def normalize_status(status: str) -> str:
         return consts.STATUS_UPCOMING
     if normed in ["unknown", "n/a", "na"]:
         return consts.STATUS_UNKNOWN
-    raise errors.InvalidStatusValueError(status)
+    raise NormalizeError("status", status)
 
 
 def normalize_sport(sport: str) -> str:
@@ -72,7 +71,7 @@ def normalize_sport(sport: str) -> str:
         return consts.SPORT_COMBAT_JJ
     if normed in ["custom"]:
         return consts.SPORT_CUSTOM
-    raise errors.InvalidSportValueError(sport)
+    raise NormalizeError("sport", sport)
 
 
 def normalize_weight_class(weight_class: str) -> str:
@@ -109,7 +108,7 @@ def normalize_weight_class(weight_class: str) -> str:
         return consts.WEIGHT_CLASS_CRUISER
     if normed in ["super heavyweight"]:
         return consts.WEIGHT_CLASS_S_HEAVY
-    raise errors.InvalidWeightClassValueError(weight_class)
+    raise NormalizeError("weight class", weight_class)
 
 
 def normalize_billing(billing: str) -> str:
@@ -126,7 +125,7 @@ def normalize_billing(billing: str) -> str:
         return consts.BILLING_PRELIM_CARD
     if normed in ["postlim"]:
         return consts.BILLING_POSTLIM_CARD
-    raise errors.InvalidBillingValueError(billing)
+    raise NormalizeError("billing", billing)
 
 
 def normalize_date(date: str) -> str:
@@ -139,7 +138,7 @@ def normalize_date(date: str) -> str:
     matched = re.match(r"^(\d+)\-(\d+)\-(\d+)$", normed)
     if matched is not None:
         f"{matched.group(1):04}-{matched.group(2):02}-{matched.group(3):02}"
-    raise errors.InvalidDateValueError(date)
+    raise NormalizeError("date", date)
 
 
 def normalize_round_format(round_format: str) -> str:
@@ -200,15 +199,15 @@ def normalize_round_format(round_format: str) -> str:
     matched = re.match(r"^(\d+) rounds$", normed)
     if matched is not None:
         return "-".join(["?"] * int(matched.group(1)))
-    raise errors.InvalidRoundFormatValueError(round_format)
+    raise NormalizeError("round format", round_format)
 
 
-def parse_round_time(round_time: str) -> Dict[str, int]:
+def parse_round_time(round_time: str) -> dict[str, int]:
     normed = normalize_text(round_time)
     matched = re.match(r"^(\d+):(\d+)$", normed)
     if matched is not None:
         return {"m": int(matched.group(1)), "s": int(matched.group(2))}
-    raise errors.InvalidRoundTimePatternError(round_time)
+    raise ParseError("round time", round_time)
 
 
 def parse_round(round: str) -> int:
@@ -216,10 +215,10 @@ def parse_round(round: str) -> int:
     matched = re.match(r"^r(\d+)$", normed)
     if matched is not None:
         return int(matched.group(1))
-    raise errors.InvalidRoundPatternError(round)
+    raise ParseError("round", round)
 
 
-def parse_match_summary(sport: str, match_summary: str) -> Dict:
+def parse_match_summary(sport: str, match_summary: str) -> dict:
     sport = normalize_sport(sport)
     normed = normalize_text(match_summary)
     normed_split = list(
@@ -227,11 +226,11 @@ def parse_match_summary(sport: str, match_summary: str) -> Dict:
     )
     try:
         status = normalize_status(normed_split[0])
-    except errors.InvalidStatusValueError:
+    except NormalizeError:
         try:
-            return {"method": infer_method(sport, "", normed)}
+            return {"method": infer_method(sport, normed_split[0], "")}
         except:
-            raise errors.InvalidMatchSummaryPatternError(match_summary)
+            raise ParseError("match summary", match_summary)
     normed = " · ".join(normed_split)
     n = len(normed_split)
     try:
@@ -315,16 +314,15 @@ def parse_match_summary(sport: str, match_summary: str) -> Dict:
             # Win|Loss|Draw|No Contest
             return {"status": status, "method": consts.METHOD_UNKNOWN}
     except (
-        errors.InvalidRoundTimePatternError,
-        errors.InvalidRoundPatternError,
-        errors.InvalidStatusValueError,
-        errors.CantInferMethodError,
-    ) as e:
-        raise errors.InvalidMatchSummaryPatternError(match_summary)
-    raise errors.InvalidMatchSummaryPatternError(match_summary)
+        NormalizeError,
+        ParseError,
+        InferError,
+    ):
+        raise ParseError("match summary", match_summary)
+    raise ParseError("match summary", match_summary)
 
 
-def parse_title_info(title_info: str) -> Dict:
+def parse_title_info(title_info: str) -> dict[str, str]:
     normed = normalize_text(title_info)
     normed_split = list(
         filter(lambda x: x != "", map(lambda x: x.strip(), normed.split("·")))
@@ -338,7 +336,7 @@ def parse_title_info(title_info: str) -> Dict:
     elif len(normed_split) == 1:
         # Tournament Championship
         return {"for": normed_split[0]}
-    raise errors.InvalidTitleInfoPatternError(title_info)
+    raise ParseError("title info", title_info)
 
 
 def parse_odds(odds: str) -> float:
@@ -353,10 +351,10 @@ def parse_odds(odds: str) -> float:
         if sign == "-":
             value *= -1
         return (value / 100) + 1.0
-    raise errors.InvalidOddsPatternError(odds)
+    raise ParseError("odds", odds)
 
 
-def parse_weight_summary(weight_summary: str) -> Dict[str, float]:
+def parse_weight_summary(weight_summary: str) -> dict[str, float]:
     normed = normalize_text(weight_summary)
     normed_split = list(map(lambda x: x.strip(), normed.split("·")))
     ret = {}
@@ -366,7 +364,7 @@ def parse_weight_summary(weight_summary: str) -> Dict[str, float]:
     # 110 kg|kgs|lb|lbs (49.9 kg|kgs|lb|lbs)
     matched = re.match(r"^(.*weight|([\d\.]+) (kgs?|lbs?))", normed_split[0])
     if matched is None:
-        raise errors.InvalidWeightSummaryPatternError(weight_summary)
+        raise ParseError("weight summary", weight_summary)
     if matched.group(2) is not None and matched.group(3) is not None:
         value, unit = float(matched.group(2)), matched.group(3)
         ret["class"] = to_weight_class(value, unit=unit)
@@ -374,7 +372,7 @@ def parse_weight_summary(weight_summary: str) -> Dict[str, float]:
     else:
         try:
             weight_class = normalize_weight_class(matched.group(1))
-        except errors.InvalidWeightClassValueError as e:
+        except NormalizeError:
             pass
         else:
             ret["class"] = weight_class
@@ -383,9 +381,9 @@ def parse_weight_summary(weight_summary: str) -> Dict[str, float]:
         # Weigh-In 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
         matched = re.match(r"^(weigh-in )?([\d\.]+) (kgs?|lbs?)", s)
         if matched is None:
-            raise errors.InvalidWeightSummaryPatternError(weight_summary)
+            raise ParseError("weight summary", weight_summary)
         if matched.group(2) is None or matched.group(3) is None:
-            raise errors.InvalidWeightSummaryPatternError(weight_summary)
+            raise ParseError("weight summary", weight_summary)
         value, unit = float(matched.group(2)), matched.group(3)
         ret["limit" if matched.group(1) is None else "weigh_in"] = to_kg(
             value, unit=unit
@@ -396,11 +394,11 @@ def parse_weight_summary(weight_summary: str) -> Dict[str, float]:
         elif "weigh_in" in ret:
             ret["class"] = to_weight_class(ret["weigh_in"])
     if ret == {}:
-        raise errors.InvalidWeightSummaryPatternError(weight_summary)
+        raise ParseError("weight summary", weight_summary)
     return ret
 
 
-def parse_last_weigh_in(last_weigh_in: str) -> Union[float, None]:
+def parse_last_weigh_in(last_weigh_in: str) -> float | None:
     normed = normalize_text(last_weigh_in)
     matched = re.match(r"^([\d\.]+) (kgs?|lbs?)", normed)
     if matched is not None:
@@ -409,10 +407,10 @@ def parse_last_weigh_in(last_weigh_in: str) -> Union[float, None]:
         return to_kg(value, unit=unit)
     if normed in consts.VALUES_NOT_AVAILABLE:
         return None
-    raise errors.InvalidLastWeighInPatternError(last_weigh_in)
+    raise ParseError("last weigh-in", last_weigh_in)
 
 
-def parse_record(record: str) -> Dict[str, int]:
+def parse_record(record: str) -> dict[str, int]:
     normed = normalize_text(record)
     matched = re.match(r"^(\d+)-(\d+)-(\d+)", normed)
     if matched is not None:
@@ -421,10 +419,10 @@ def parse_record(record: str) -> Dict[str, int]:
             "l": int(matched.group(2)),
             "d": int(matched.group(3)),
         }
-    raise errors.InvalidRecordPatternError(record)
+    raise ParseError("record", record)
 
 
-def parse_round_format(round_format: str) -> Dict:
+def parse_round_format(round_format: str) -> dict:
     # 4-4-4
     # 4
     # 4-4-4-ot
@@ -466,7 +464,7 @@ def parse_round_format(round_format: str) -> Dict:
             "type": consts.ROUND_FORMAT_TYPE_ROUND_TIME_UNKNONW,
             "rounds": len(round_format.split("-")),
         }
-    raise errors.InvalidRoundFormatPatternError(round_format)
+    raise ParseError("round format", round_format)
 
 
 def calc_age(date: str, date_of_birth: str) -> float:
@@ -514,7 +512,7 @@ def to_weight_class(value: float, unit: str = "kg", margin: float = 0.02) -> str
     return consts.WEIGHT_CLASS_S_HEAVY
 
 
-def to_weight_limit(weight_class: str) -> Union[None, float]:
+def to_weight_limit(weight_class: str) -> float | None:
     if weight_class not in consts.WEIGHT_CLASSES:
         raise ValueError(f"invalid weight class: {weight_class}")
     if weight_class == consts.WEIGHT_CLASS_ATOM:
@@ -667,7 +665,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 or "pound" in normed
             ):
                 return consts.METHOD_KO_TKO
-            raise errors.CantInferMethodError(note)
+            return consts.METHOD_DECISION
 
         # KO/TKO
         if (
@@ -941,4 +939,4 @@ def infer_method(sport: str, status: str, note: str) -> str:
         ):
             return consts.METHOD_RETIREMENT
 
-    raise errors.CantInferMethodError(note)
+    raise InferError("method", note)
