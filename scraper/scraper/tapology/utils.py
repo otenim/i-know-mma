@@ -616,11 +616,13 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "back of" in normed
             or "fell" in normed
             or "soccer" in normed
+            or "clash or heads" in normed
             or "knee to grounded" in normed
             or "knee to a downed" in normed
             or "knee to downed" in normed
             or "kick to grounded" in normed
             or "head of grounded" in normed
+            or "knee to head" in normed
             or "knee to the head" in normed
             or "dropped on head" in normed
             or "lotion" in normed
@@ -631,6 +633,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "hair pull" in normed
             or "unsportsman" in normed
             or "over fight length" in normed
+            or "after end of" in normed
             or "after the bell" in normed
         ):
             return consts.METHOD_FOUL
@@ -643,6 +646,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "cut from" in normed
             or "shin cut" in normed
             or "disloc" in normed
+            or "blackout" in normed
         ):
             return consts.METHOD_STOPPAGE_DOCTOR
         if (
@@ -662,6 +666,8 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "choke" in normed
             or "lock" in normed
             or "armbar" in normed
+            or "guillot" in normed
+            or "pound" in normed
         ):
             return consts.METHOD_OVERWEIGHT
     elif status in [consts.STATUS_WIN, consts.STATUS_LOSS]:
@@ -721,6 +727,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "fish hook" in normed
             or "over fight length" in normed
             or "inappropriate conduct" in normed
+            or "not signed" in normed
             or "did not" in normed
             or "didn't" in normed
             or "failed to" in normed
@@ -734,6 +741,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "goug" in normed
             or "agressive" in normed
             or "between rounds" in normed
+            or "bit the" in normed
             or "pulled off opponents glove" in normed
         ):
             return consts.METHOD_DQ
@@ -746,12 +754,13 @@ def infer_method(sport: str, status: str, note: str) -> str:
             return consts.METHOD_STOPPAGE_CORNER
         if (
             normed in ["cut", "cuts", "torn bicep", "inkury"]
-            or "doctor stop" in normed
+            or "doctor sto" in normed
             or "injur" in normed
             or "medical" in normed
             or "broken" in normed
             or "disloc" in normed
             or "head cut" in normed
+            or "eye cut" in normed
             or "cut on" in normed
             or "cut to" in normed
             or "cut stop" in normed
@@ -763,6 +772,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "hematoma" in normed
             or "bleeding" in normed
             or "cracked head" in normed
+            or "doctors sto" in normed
         ):
             return consts.METHOD_STOPPAGE_DOCTOR
         if (
@@ -809,6 +819,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 "pain on the leg",
                 "painful grip on the leg",
                 "side mount",
+                "t",
             ]
             or "ko" in normed
             or "tko" in normed
@@ -841,6 +852,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "check hook" in normed
             or "eree stop" in normed
             or "ref stop" in normed
+            or "refs stop" in normed
             or "knee &" in normed
             or "knee from" in normed
             or "knee to" in normed
@@ -899,6 +911,8 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "leg split" in normed
             or "tobillo" in normed
             or "plata" in normed
+            or "rear naked" in normed
+            or "rnc" in normed
             or "mother's" in normed
             or "paper cutter" in normed
             or "taktarov" in normed
@@ -923,12 +937,14 @@ def infer_method(sport: str, status: str, note: str) -> str:
         ):
             return consts.METHOD_SUBMISSION
         if normed in [
+            "unknown",
             "other",
             "efective",
             "win · hoke) round 1, 0:53 · 0:53 · r1",
             "p",
             "r",
             "gu",
+            "should of justice",
         ]:
             return consts.METHOD_UNKNOWN
     raise InferError("method", note)
