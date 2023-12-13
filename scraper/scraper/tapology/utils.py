@@ -571,7 +571,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             return consts.METHOD_UNKNOWN
         if "drug" in normed or "doping" in normed or "inhaler" in normed:
             return consts.METHOD_DOPING
-        if "overturn" in normed:
+        if "overturn" in normed or "altercation" in normed:
             return consts.METHOD_OVERTURNED
         if "weight" in normed:
             return consts.METHOD_OVERWEIGHT
@@ -692,7 +692,8 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "back of" in normed
             or "fell" in normed
             or "unanswer" in normed
-            or "grabbing" in normed
+            or "grab" in normed
+            or "ignored" in normed
             or "infraction" in normed
             or "exit" in normed
             or "knee to grounded" in normed
@@ -712,12 +713,13 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "finger in" in normed
             or "thumb in" in normed
             or "hair pull" in normed
+            or "facebuster" in normed
             or "bad position" in normed
             or "cussed out" in normed
             or "unsportsman" in normed
             or "fish hook" in normed
-            or "fence grab" in normed
             or "over fight length" in normed
+            or "inappropriate conduct" in normed
             or "did not" in normed
             or "didn't" in normed
             or "failed to" in normed
@@ -770,6 +772,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "quit" in normed
             or "fatigue" in normed
             or "unable to continue" in normed
+            or "could not continue" in normed
             or "reitr" in normed
             or "leaving" in normed
             or "wave off" in normed
@@ -789,6 +792,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
                 return consts.METHOD_DECISION_POINTS
             if "technic" in normed or "ref" in normed:
                 return consts.METHOD_DECISION_TECHNICAL
+            return consts.METHOD_DECISION
         if (
             normed
             in [
@@ -849,9 +853,11 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "strk" in normed
             or "lever" in normed
             or "painful reception" in normed
+            or "painfull reception" in normed
             or "upercut" in normed
             or "overland" in normed
             or "flyng" in normed
+            or "flygn" in normed
         ):
             return consts.METHOD_KO_TKO
         if (
@@ -895,6 +901,8 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "mother's" in normed
             or "paper cutter" in normed
             or "taktarov" in normed
+            or "grapevine" in normed
+            or "rexangle" in normed
             or "chin in the eye" in normed
             or "crucifix" in normed
             or "electric chair" in normed
