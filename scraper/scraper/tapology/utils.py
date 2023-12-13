@@ -703,6 +703,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "head of grounded" in normed
             or "knee to the head" in normed
             or "dropped on head" in normed
+            or "thrown out of" in normed
             or "corner interference" in normed
             or "lotion" in normed
             or "spine" in normed
@@ -921,6 +922,13 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "amerik" in normed
         ):
             return consts.METHOD_SUBMISSION
-        if normed in ["other", "efective"]:
+        if normed in [
+            "other",
+            "efective",
+            "win · hoke) round 1, 0:53 · 0:53 · r1",
+            "p",
+            "r",
+            "gu",
+        ]:
             return consts.METHOD_UNKNOWN
     raise InferError("method", note)
