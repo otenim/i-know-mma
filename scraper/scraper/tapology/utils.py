@@ -550,6 +550,19 @@ def infer_method(sport: str, status: str, note: str) -> str:
     ]:
         return consts.METHOD_UNKNOWN
 
+    if normed in [
+        "unknown",
+        "other",
+        "efective",
+        "win · hoke) round 1, 0:53 · 0:53 · r1",
+        "p",
+        "r",
+        "gu",
+        "should of justice",
+        "R 1 TIME 4:04",
+    ]:
+        return consts.METHOD_UNKNOWN
+
     if status == consts.STATUS_DRAW:
         if normed == "draw":
             return consts.METHOD_UNKNOWN
@@ -669,6 +682,8 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "lock" in normed
             or "armbar" in normed
             or "guillot" in normed
+            or "kimura" in normed
+            or "triang" in normed
             or "pound" in normed
         ):
             return consts.METHOD_OVERWEIGHT
@@ -862,6 +877,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "ref stop" in normed
             or "refs stop" in normed
             or "knee &" in normed
+            or "knee face" in normed
             or "knee from" in normed
             or "knee to" in normed
             or "spinning" in normed
@@ -945,15 +961,4 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "amerik" in normed
         ):
             return consts.METHOD_SUBMISSION
-        if normed in [
-            "unknown",
-            "other",
-            "efective",
-            "win · hoke) round 1, 0:53 · 0:53 · r1",
-            "p",
-            "r",
-            "gu",
-            "should of justice",
-        ]:
-            return consts.METHOD_UNKNOWN
     raise InferError("method", note)
