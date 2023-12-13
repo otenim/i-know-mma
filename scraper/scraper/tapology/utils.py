@@ -589,7 +589,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "power outage" in normed
         ):
             return consts.METHOD_OUTSIDE_INCIDENT
-        if "both" in normed or "double" in normed:
+        if "both" in normed or "double" in normed or "fighters" in normed:
             return consts.METHOD_BOTH
         if (
             "error" in normed
@@ -635,6 +635,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "over fight length" in normed
             or "after end of" in normed
             or "after the bell" in normed
+            or "before start of" in normed
         ):
             return consts.METHOD_FOUL
         if (
@@ -663,6 +664,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "right" in normed
             or "left" in normed
             or "kick" in normed
+            or "elbows" in normed
             or "choke" in normed
             or "lock" in normed
             or "armbar" in normed
@@ -680,7 +682,12 @@ def infer_method(sport: str, status: str, note: str) -> str:
         if "walk over" in normed or "forfeit" in normed:
             return consts.METHOD_FORFEIT
         if (
-            normed in ["ground knee", "egan inoue ran into the ring"]
+            normed
+            in [
+                "ground knee",
+                "egan inoue ran into the ring",
+                "threw opponent from ring",
+            ]
             or "illegal" in normed
             or "foul" in normed
             or "accident" in normed
@@ -761,6 +768,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "disloc" in normed
             or "head cut" in normed
             or "eye cut" in normed
+            or "shin cut" in normed
             or "cut on" in normed
             or "cut to" in normed
             or "cut stop" in normed
@@ -882,6 +890,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "tap" in normed
             or "bar" in normed
             or "kimura" in normed
+            or "nelson" in normed
             or "crank" in normed
             or "crunch" in normed
             or "gatame" in normed
