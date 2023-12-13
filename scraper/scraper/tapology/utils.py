@@ -778,7 +778,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "wave off" in normed
             or "didn´t enter" in normed
         ):
-            return consts.METHOD_RETIREMENT
+            return consts.METHOD_RETIRE
         if "decision" in normed or normed in ["unanimous", "majority", "split"]:
             if normed == "decision":
                 return consts.METHOD_DECISION

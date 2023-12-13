@@ -127,7 +127,7 @@ STATUSES = [
 # Ending Method
 METHOD_KO_TKO = "ko/tko"
 METHOD_SUBMISSION = "submission"
-METHOD_RETIREMENT = "retirement"
+METHOD_RETIRE = "retire"
 METHOD_FORFEIT = "forfeit"
 METHOD_STOPPAGE_CORNER = "stoppage_corner"
 METHOD_STOPPAGE_DOCTOR = "stoppage_doctor"
