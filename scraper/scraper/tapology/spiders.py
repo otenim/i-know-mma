@@ -503,3 +503,56 @@ class FightersSpider(scrapy.Spider):
             if len(ret["results"]) == 0:
                 return
         return ret
+
+
+class FemaleSpider(scrapy.Spider):
+    name = "female"
+    start_urls = ["https://www.tapology.com/search/misc/female-mixed-martial-artists"]
+
+    def __init__(
+        self,
+        min_mma_matches: int = 0,
+        ignore_am_mma_fighters: bool = False,
+        *args,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        if min_mma_matches < 0:
+            raise ValueError(f"min_mma_matches expects >= 0 but {min_mma_matches}")
+        self.min_mma_matches = min_mma_matches
+        self.ignore_am_mma_fighters = ignore_am_mma_fighters
+
+    def parse(self, response: TextResponse) -> Generator[dict, None, None]:
+        fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
+        for fighter in fighters:
+            career_record = fighter.xpath("./td[7]/text()").get()
+            if career_record is None:
+                self.logger.error(
+                    "Unexpected page structure: could not find mma career record column on the fighters' list"
+                )
+                continue
+            career_record = normalize_text(career_record)
+            matched = re.match(
+                r"^(?:(am) )?(\d+)-(\d+)-(\d+)(?:, \d+ nc)?$", career_record
+            )
+            if matched is None:
+                self.logger.error(f"Unexpected mma record format: {career_record}")
+                continue
+            if self.ignore_am_mma_fighters and matched.group(1) == "am":
+                continue
+            total = sum(
+                [int(matched.group(2)), int(matched.group(3)), int(matched.group(4))]
+            )
+            if total < self.min_mma_matches:
+                continue
+            url = fighter.xpath("./td[1]/a/@href").get()
+            name = fighter.xpath("./td[1]/a/text()").get()
+            if url is not None and name is not None:
+                yield {"url": response.urljoin(url), "name": normalize_text(name)}
+
+        # Move to the next page
+        next_url = response.xpath(
+            "//span[@class='moreLink']/nav[@class='pagination']/span[@class='next']/a/@href"
+        ).get()
+        if next_url is not None:
+            yield response.follow(next_url, callback=self.parse)
