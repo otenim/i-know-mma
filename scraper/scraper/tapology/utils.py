@@ -545,7 +545,9 @@ def to_kg(value: float, unit: str = "lb") -> float:
 
 def infer_method(sport: str, status: str, note: str) -> str:
     normed = normalize_text(note)
-    if sport != consts.SPORT_MMA:
+    if sport not in [
+        consts.SPORT_MMA,
+    ]:
         return consts.METHOD_UNKNOWN
 
     if status == consts.STATUS_DRAW:
@@ -562,9 +564,9 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "disq" in normed
         ):
             return consts.METHOD_FOUL
-        raise InferError("method", note)
-
-    if status == consts.STATUS_NC:
+        if "injur" in normed:
+            return consts.METHOD_STOPPAGE_DOCTOR
+    elif status == consts.STATUS_NC:
         if normed in ["nc", "no contest"]:
             return consts.METHOD_UNKNOWN
         if "drug" in normed or "doping" in normed or "inhaler" in normed:
@@ -587,7 +589,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "power outage" in normed
         ):
             return consts.METHOD_OUTSIDE_INCIDENT
-        if "both" in normed:
+        if "both" in normed or "double" in normed:
             return consts.METHOD_BOTH
         if (
             "error" in normed
@@ -603,6 +605,7 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "illegal" in normed
             or "foul" in normed
             or "accident" in normed
+            or "prohibit" in normed
             or "forbid" in normed
             or "inten" in normed
             or "inadv" in normed
@@ -659,5 +662,172 @@ def infer_method(sport: str, status: str, note: str) -> str:
             or "armbar" in normed
         ):
             return consts.METHOD_OVERWEIGHT
-        raise InferError("method", note)
-    return consts.METHOD_UNKNOWN
+    elif status in [consts.STATUS_WIN, consts.STATUS_LOSS]:
+        if "overturn" in normed:
+            return consts.METHOD_OVERTURNED
+        if "drug" in normed or "doping" in normed:
+            return consts.METHOD_DOPING
+        if "weight" in normed:
+            return consts.METHOD_OVERWEIGHT
+        if (
+            normed in ["round went over time"]
+            or "illegal" in normed
+            or "foul" in normed
+            or "accident" in normed
+            or "prohibit" in normed
+            or "disq" in normed
+            or "forbid" in normed
+            or "inten" in normed
+            or "inadv" in normed
+            or "headbut" in normed
+            or "groin" in normed
+            or "biting" in normed
+            or "low blow" in normed
+            or "poke" in normed
+            or "back of" in normed
+            or "fell" in normed
+            or "unanswer" in normed
+            or "knee to grounded" in normed
+            or "knee to a downed" in normed
+            or "knee to downed" in normed
+            or "kick to grounded" in normed
+            or "head of grounded" in normed
+            or "knee to the head" in normed
+            or "dropped on head" in normed
+            or "corner interference" in normed
+            or "lotion" in normed
+            or "spine" in normed
+            or "grease" in normed
+            or "liability" in normed
+            or "finger in" in normed
+            or "thumb in" in normed
+            or "hair pull" in normed
+            or "unsportsman" in normed
+            or "over fight length" in normed
+            or "did not" in normed
+            or "didn't" in normed
+            or "failed to" in normed
+            or "answer the bell" in normed
+            or "answer bell" in normed
+            or "after stop" in normed
+            or "after the bell" in normed
+            or "mouthpiece" in normed
+            or "mouth protector" in normed
+            or "running from" in normed
+        ):
+            return consts.METHOD_DQ
+        if "corner stop" in normed or "towel" in normed or "refus" in normed:
+            return consts.METHOD_STOPPAGE_CORNER
+        if (
+            normed in ["forehead cut", "cut", "cuts"]
+            or "doctor stop" in normed
+            or "injury" in normed
+            or "medical" in normed
+            or "broken" in normed
+            or "disloc" in normed
+            or "cut on" in normed
+            or "cut to" in normed
+            or "doctor's stop" in normed
+            or "dr. stop" in normed
+            or "vomit" in normed
+            or "hematoma" in normed
+            or "bleeding" in normed
+        ):
+            return consts.METHOD_STOPPAGE_DOCTOR
+        if (
+            "retir" in normed
+            or "abandon" in normed
+            or "exhaust" in normed
+            or "unable to continue" in normed
+        ):
+            return consts.METHOD_RETIREMENT
+        if "decision" in normed or normed in ["unanimous", "majority", "split"]:
+            if normed == "decision":
+                return consts.METHOD_DECISION
+            if "una" in normed:
+                return consts.METHOD_DECISION_UNANIMOUS
+            if "maj" in normed:
+                return consts.METHOD_DECISION_MAJORITY
+            if "spl" in normed:
+                return consts.METHOD_DECISION_SPLIT
+            if "point" in normed:
+                return consts.METHOD_DECISION_POINTS
+        if (
+            normed in ["ko/tko", "ko", "tko", "knee"]
+            or "pound" in normed
+            or "punch" in normed
+            or "strik" in normed
+            or "kick" in normed
+            or "knock" in normed
+            or "knees" in normed
+            or "jab" in normed
+            or "straight" in normed
+            or "slam" in normed
+            or "stomp" in normed
+            or "bomb" in normed
+            or "liver" in normed
+            or "body" in normed
+            or "hooks" in normed
+            or "counter" in normed
+            or "suplex" in normed
+            or "upper" in normed
+            or "elbow" in normed
+            or "overhand" in normed
+            or "fist" in normed
+            or "jumping" in normed
+            or "flying" in normed
+            or "right hand" in normed
+            or "left hand" in normed
+            or "right hook" in normed
+            or "left hook" in normed
+            or "right cross" in normed
+            or "left cross" in normed
+            or "eree stop" in normed
+            or "ref stop" in normed
+            or "knee &" in normed
+            or "knee from" in normed
+            or "knee to" in normed
+            or "forearms" in normed
+            or "pnuch" in normed
+            or "punhe" in normed
+            or "painful reception" in normed
+        ):
+            return consts.METHOD_KO_TKO
+        if (
+            normed in ["submission"]
+            or "choke" in normed
+            or "lock" in normed
+            or "hold" in normed
+            or "tap" in normed
+            or "bar" in normed
+            or "kimura" in normed
+            or "crank" in normed
+            or "gatame" in normed
+            or "americ" in normed
+            or "triang" in normed
+            or "stretch" in normed
+            or "verbal" in normed
+            or "anacon" in normed
+            or "guillot" in normed
+            or "cravat" in normed
+            or "heel hook" in normed
+            or "heelhook" in normed
+            or "neck tie" in normed
+            or "necktie" in normed
+            or "cross face" in normed
+            or "crossface" in normed
+            or "twister" in normed
+            or "plata" in normed
+            or "chin in the eye" in normed
+            or "crucifix" in normed
+            or "calf slice" in normed
+            or "calf crush" in normed
+            or "mataleao" in normed
+            or "boston crab" in normed
+            or "windshield" in normed
+            or "can opener" in normed
+            or "kmura" in normed
+            or "kumura" in normed
+        ):
+            return consts.METHOD_SUBMISSION
+    raise InferError("method", note)
