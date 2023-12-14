@@ -25,7 +25,19 @@ from .utils import (
 
 class FightersSpider(scrapy.Spider):
     name = "fighters"
-    start_urls = ["https://www.tapology.com/search"]
+    start_urls = [
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Atomweight-105-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Strawweight-115-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Flyweight-125-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Bantamweight-135-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Featherweight-145-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Lightweight-155-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Welterweight-170-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Middleweight-185-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Light_Heavyweight-205-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Heavyweight-265-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Super_Heavyweight-over-265-pounds",
+    ]
 
     def __init__(
         self,
@@ -41,15 +53,6 @@ class FightersSpider(scrapy.Spider):
         self.ignore_am_mma_fighters = ignore_am_mma_fighters
 
     def parse(self, response: TextResponse) -> Generator[Request, None, None]:
-        urls = response.xpath(
-            "//div[@class='siteSearchFightersByWeightClass']/dd/a/@href"
-        ).getall()
-        for url in urls:
-            yield response.follow(url, callback=self.parse_fighter_list)
-
-    def parse_fighter_list(
-        self, response: TextResponse
-    ) -> Generator[Request, None, None]:
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
         for fighter in fighters:
             career_record = fighter.xpath("./td[7]/text()").get()
@@ -74,14 +77,20 @@ class FightersSpider(scrapy.Spider):
                 continue
             url = fighter.xpath("./td[1]/a/@href").get()
             if url is not None:
-                yield response.follow(url, callback=self.parse_fighter)
+                yield response.follow(
+                    url,
+                    callback=self.parse_fighter,
+                )
 
         # Move to the next page
         next_url = response.xpath(
             "//span[@class='moreLink']/nav[@class='pagination']/span[@class='next']/a/@href"
         ).get()
         if next_url is not None:
-            yield response.follow(next_url, callback=self.parse_fighter_list)
+            yield response.follow(
+                next_url,
+                callback=self.parse,
+            )
 
     def parse_fighter(self, response: TextResponse) -> dict | None:
         ret = {}
