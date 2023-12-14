@@ -419,6 +419,11 @@ class FightersSpider(scrapy.Spider):
                     except ParseError as e:
                         self.logger.error(e)
 
+                    # Match url (optional)
+                    match_url = match_summary_section.xpath("./a/@href").get()
+                    if match_url is not None:
+                        item["match"] = response.urljoin(match_url)
+
                     # More info (optional)
                     label_sections = result_section.xpath(
                         "./div[@class='details tall']/div[@class='div']/span[@class='label']"
@@ -511,46 +516,18 @@ class FemaleSpider(scrapy.Spider):
 
     def __init__(
         self,
-        min_mma_matches: int = 0,
-        ignore_am_mma_fighters: bool = False,
         *args,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
-        if min_mma_matches < 0:
-            raise ValueError(f"min_mma_matches expects >= 0 but {min_mma_matches}")
-        self.min_mma_matches = min_mma_matches
-        self.ignore_am_mma_fighters = ignore_am_mma_fighters
 
     def parse(self, response: TextResponse) -> Generator[dict, None, None]:
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
         for fighter in fighters:
-            career_record = fighter.xpath("./td[7]/text()").get()
-            if career_record is None:
-                self.logger.error(
-                    "Unexpected page structure: could not find mma career record column on the fighters' list"
-                )
-                continue
-            career_record = normalize_text(career_record)
-            matched = re.match(
-                r"^(?:(am) )?(\d+)-(\d+)-(\d+)(?:, \d+ nc)?$", career_record
-            )
-            if matched is None:
-                self.logger.error(f"Unexpected mma record format: {career_record}")
-                continue
-            if self.ignore_am_mma_fighters and matched.group(1) == "am":
-                continue
-            total = sum(
-                [int(matched.group(2)), int(matched.group(3)), int(matched.group(4))]
-            )
-            if total < self.min_mma_matches:
-                continue
             url = fighter.xpath("./td[1]/a/@href").get()
             name = fighter.xpath("./td[1]/a/text()").get()
             if url is not None and name is not None:
                 yield {"url": response.urljoin(url), "name": normalize_text(name)}
-
-        # Move to the next page
         next_url = response.xpath(
             "//span[@class='moreLink']/nav[@class='pagination']/span[@class='next']/a/@href"
         ).get()
