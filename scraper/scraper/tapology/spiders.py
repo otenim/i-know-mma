@@ -41,56 +41,24 @@ class FightersSpider(scrapy.Spider):
 
     def __init__(
         self,
-        min_mma_matches: int = 1,
-        ignore_am_mma_fighters: bool = False,
         *args,
         **kwargs,
     ) -> None:
         super(FightersSpider, self).__init__(*args, **kwargs)
-        if min_mma_matches < 0:
-            raise ValueError(f"min_mma_matches expects >= 0 but {min_mma_matches}")
-        self.min_mma_matches = min_mma_matches
-        self.ignore_am_mma_fighters = ignore_am_mma_fighters
 
     def parse(self, response: TextResponse) -> Generator[Request, None, None]:
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
         for fighter in fighters:
-            career_record = fighter.xpath("./td[7]/text()").get()
-            if career_record is None:
-                self.logger.error(
-                    "Unexpected page structure: could not find mma career record column on the fighters' list"
-                )
-                continue
-            career_record = normalize_text(career_record)
-            matched = re.match(
-                r"^(?:(am) )?(\d+)-(\d+)-(\d+)(?:, \d+ nc)?$", career_record
-            )
-            if matched is None:
-                self.logger.error(f"Unexpected mma record format: {career_record}")
-                continue
-            if self.ignore_am_mma_fighters and matched.group(1) == "am":
-                continue
-            total = sum(
-                [int(matched.group(2)), int(matched.group(3)), int(matched.group(4))]
-            )
-            if total < self.min_mma_matches:
-                continue
             url = fighter.xpath("./td[1]/a/@href").get()
             if url is not None:
-                yield response.follow(
-                    url,
-                    callback=self.parse_fighter,
-                )
+                yield response.follow(url, callback=self.parse_fighter)
 
         # Move to the next page
         next_url = response.xpath(
             "//span[@class='moreLink']/nav[@class='pagination']/span[@class='next']/a/@href"
         ).get()
         if next_url is not None:
-            yield response.follow(
-                next_url,
-                callback=self.parse,
-            )
+            yield response.follow(next_url, callback=self.parse)
 
     def parse_fighter(self, response: TextResponse) -> dict | None:
         ret = {}
@@ -519,18 +487,71 @@ class FightersSpider(scrapy.Spider):
         return ret
 
 
+class PromotionsSpider(scrapy.Spider):
+    name = "promotions"
+    start_urls = ["https://www.tapology.com/fightcenter/promotions"]
+
+    def __init__(self, *args, **kwargs) -> Generator[dict | Request, None, None]:
+        super().__init__(*args, **kwargs)
+
+    def parse(self, response: TextResponse):
+        promotions = response.xpath(
+            "//div[@class='promotionsIndex']/ul[@class='promotions']/li"
+        )
+        for promotion in promotions:
+            ret = {}
+
+            # Name section (must)
+            name_section = promotion.xpath("./div[@class='name']")
+            if len(name_section) == 0:
+                self.logger.error("name section is missing")
+                continue
+
+            # URL (must)
+            url = name_section.xpath("./span[1]/a/@href").get()
+            if url is None:
+                self.logger.error("url is missing")
+                continue
+            ret["url"] = response.urljoin(url)
+
+            # Name of promotion (must)
+            name = name_section.xpath("./span[1]/a/text()").get()
+            if name is None:
+                self.logger.error("name is missing")
+                continue
+            ret["name"] = normalize_text(name)
+
+            # Shorten name (optional)
+            shorten = name_section.xpath("./span[2]/text()").get()
+            if shorten is not None:
+                ret["shorten"] = normalize_text(shorten)
+
+            # Headquarter (two-character country code, optional)
+            flag = promotion.xpath("./div[@class='headquarters']/img/@src").get()
+            if flag is not None:
+                code = normalize_text(flag.split("/")[-1].split("-")[0])
+                if len(code) == 2:
+                    ret["headquarter"] = code
+                else:
+                    self.logger.erro(f"not a two-character country code: {code}")
+            yield ret
+
+        # To the next page
+        next_url = response.xpath(
+            "//span[@class='moreLink']/nav[@class='pagination']/span[@class='next']/a/@href"
+        ).get()
+        if next_url is not None:
+            yield response.follow(next_url, callback=self.parse)
+
+
 class FemaleSpider(scrapy.Spider):
     name = "female"
     start_urls = ["https://www.tapology.com/search/misc/female-mixed-martial-artists"]
 
-    def __init__(
-        self,
-        *args,
-        **kwargs,
-    ) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-    def parse(self, response: TextResponse) -> Generator[dict, None, None]:
+    def parse(self, response: TextResponse) -> Generator[dict | Request, None, None]:
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
         for fighter in fighters:
             url = fighter.xpath("./td[1]/a/@href").get()
