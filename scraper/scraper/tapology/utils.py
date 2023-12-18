@@ -87,8 +87,6 @@ def normalize_sport(sport: str) -> str:
 
 def normalize_weight_class(weight_class: str) -> str | None:
     normed = normalize_text(weight_class)
-    if is_na(normed):
-        return None
     if normed in consts.WEIGHT_CLASSES:
         return normed
     if normed in ["atomweight"]:
@@ -121,6 +119,10 @@ def normalize_weight_class(weight_class: str) -> str | None:
         return consts.WEIGHT_CLASS_CRUISER
     if normed in ["super heavyweight"]:
         return consts.WEIGHT_CLASS_S_HEAVY
+    if normed in ["openweight", "open weight", "open"]:
+        return consts.WEIGHT_CLASS_OPEN
+    if normed in ["catchweight", "catch weight", "catch"]:
+        return consts.WEIGHT_CLASS_CATCH
     raise NormalizeError("weight class", normed)
 
 
@@ -150,10 +152,8 @@ def normalize_division(division: str) -> str:
     raise NormalizeError("division", normed)
 
 
-def normalize_date(date: str) -> str | None:
+def normalize_date(date: str) -> str:
     normed = normalize_text(date)
-    if is_na(normed):
-        return None
     # 2014.09.09
     matched = re.search(r"(\d{4})\.(\d{2})\.(\d{2})", normed)
     if matched is not None:
@@ -241,10 +241,8 @@ def parse_round(round: str) -> int:
     raise ParseError("round", normed)
 
 
-def parse_nickname(nickname: str) -> str | None:
+def parse_nickname(nickname: str) -> str:
     normed = normalize_text(nickname)
-    if is_na(normed):
-        return None
     matched = re.match(r"\"(.+)\"", normed)
     if matched is not None:
         return matched.group(1)
@@ -390,8 +388,8 @@ def parse_weight_summary(weight_summary: str) -> dict[str, float]:
     else:
         try:
             weight_class = normalize_weight_class(matched.group(1))
-        except NormalizeError:
-            pass
+        except NormalizeError as e:
+            raise ParseError("weight summary", normed) from e
         else:
             ret["class"] = weight_class
     for s in normed_split[1:]:
@@ -411,8 +409,6 @@ def parse_weight_summary(weight_summary: str) -> dict[str, float]:
             ret["class"] = to_weight_class(ret["limit"])
         elif "weigh_in" in ret:
             ret["class"] = to_weight_class(ret["weigh_in"])
-    if "class" in ret and "limit" not in ret:
-        ret["limit"] = to_weight_limit(ret["class"])
     if ret == {}:
         raise ParseError("weight summary", normed)
     return ret
@@ -422,10 +418,8 @@ def get_id_from_url(url: str) -> str:
     return url.split("/")[-1]
 
 
-def parse_last_weigh_in(last_weigh_in: str) -> float | None:
+def parse_last_weigh_in(last_weigh_in: str) -> float:
     normed = normalize_text(last_weigh_in)
-    if is_na(normed):
-        return None
     matched = re.match(r"([\d\.]+) (kgs?|lbs?)", normed)
     if matched is not None:
         value = float(matched.group(1))
@@ -434,40 +428,32 @@ def parse_last_weigh_in(last_weigh_in: str) -> float | None:
     raise ParseError("last weigh-in", normed)
 
 
-def parse_height(height: str) -> float | None:
+def parse_height(height: str) -> float:
     normed = normalize_text(height)
-    if is_na(normed):
-        return None
     matched = re.search(r"([\d\.]+)\'([\d\.]+)\"", normed)
     if matched is not None:
         return to_meter(float(matched.group(1)), float(matched.group(2)))
     raise ParseError("height", normed)
 
 
-def parse_reach(reach: str) -> float | None:
+def parse_reach(reach: str) -> float:
     normed = normalize_text(reach)
-    if is_na(normed):
-        return None
     matched = re.search(r"([\d\.]+)\"", normed)
     if matched is not None:
         return to_meter(0, float(matched.group(1)))
     raise ParseError("reach", normed)
 
 
-def parse_earnings(earnings: str) -> int | None:
+def parse_earnings(earnings: str) -> int:
     normed = normalize_text(earnings)
-    if is_na(normed):
-        return None
     matched = re.search(r"\$([\d\,]+)", normed)
     if matched is not None:
         return int(matched.group(1).replace(",", ""))
     raise ParseError("earnings", normed)
 
 
-def parse_record(record: str) -> dict[str, int] | None:
+def parse_record(record: str) -> dict[str, int]:
     normed = normalize_text(record)
-    if is_na(normed):
-        return None
     matched = re.match(
         r"^(?:climbed to |fell to |moved to |stayed at )?(\d+)-(\d+)(?:-(\d+))?", normed
     )
@@ -602,6 +588,10 @@ def to_weight_limit(weight_class: str) -> float | None:
         return consts.WEIGHT_LIMIT_CRUISER
     if weight_class == consts.WEIGHT_CLASS_HEAVY:
         return consts.WEIGHT_LIMIT_HEAVY
+    if weight_class == consts.WEIGHT_CLASS_OPEN:
+        return None
+    if weight_class == consts.WEIGHT_CLASS_CATCH:
+        return None
     return consts.WEIGHT_LIMIT_S_HEAVY
 
 

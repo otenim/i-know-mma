@@ -22,7 +22,6 @@ from .utils import (
     parse_title_info,
     is_na,
     calc_age,
-    get_id_from_url,
 )
 
 
@@ -67,7 +66,7 @@ class FightersSpider(scrapy.Spider):
         ret = {}
 
         # Fighter ID (must)
-        ret["id"] = get_id_from_url(response.url)
+        ret["id"] = response.url
 
         # Fighter name (optional)
         name = response.xpath(
@@ -91,11 +90,9 @@ class FightersSpider(scrapy.Spider):
 
         # Nickname (optional)
         nickname = header_section.xpath("./h4[@class='preTitle nickname']/text()").get()
-        if nickname is not None:
+        if nickname is not None and not is_na(nickname):
             try:
-                parsed = parse_nickname(nickname)
-                if parsed is not None:
-                    ret["nickname"] = parsed
+                ret["nickname"] = parse_nickname(nickname)
             except ParseError as e:
                 self.logger.error(e)
 
@@ -110,9 +107,7 @@ class FightersSpider(scrapy.Spider):
         ).get()
         if record is not None:
             try:
-                parsed = parse_record(record)
-                if parsed is not None:
-                    ret["record"] = parsed
+                ret["record"] = parse_record(record)
             except ParseError as e:
                 self.logger.error(e)
 
@@ -120,11 +115,9 @@ class FightersSpider(scrapy.Spider):
         date_of_birth = profile_section.xpath(
             "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()"
         ).get()
-        if date_of_birth is not None:
+        if date_of_birth is not None and not is_na(date_of_birth):
             try:
-                parsed = normalize_date(date_of_birth)
-                if parsed is not None:
-                    ret["date_of_birth"] = parsed
+                ret["date_of_birth"] = normalize_date(date_of_birth)
             except NormalizeError as e:
                 self.logger.error(e)
 
@@ -144,11 +137,9 @@ class FightersSpider(scrapy.Spider):
         last_weigh_in = profile_section.xpath(
             "./ul/li/strong[text()='| Last Weigh-In:']/following-sibling::span[1]/text()"
         ).get()
-        if last_weigh_in is not None:
+        if last_weigh_in is not None and not is_na(last_weigh_in):
             try:
-                parsed = parse_last_weigh_in(last_weigh_in)
-                if parsed is not None:
-                    ret["last_weigh_in"] = parsed
+                ret["last_weigh_in"] = parse_last_weigh_in(last_weigh_in)
             except ParseError as e:
                 self.logger.error(e)
 
@@ -158,9 +149,7 @@ class FightersSpider(scrapy.Spider):
         ).get()
         if earnings is not None:
             try:
-                parsed = parse_earnings(earnings)
-                if parsed is not None:
-                    ret["earnings"] = parsed
+                ret["earnings"] = parse_earnings(earnings)
             except ParseError as e:
                 self.logger.error(e)
 
@@ -169,17 +158,15 @@ class FightersSpider(scrapy.Spider):
             "./ul/li/strong[text()='Affiliation:']/following-sibling::span[1]/a/@href"
         ).get()
         if affili_url is not None:
-            ret["affiliation"] = get_id_from_url(affili_url)
+            ret["affiliation"] = response.urljoin(affili_url)
 
         # Height (optional)
         height = profile_section.xpath(
             "./ul/li/strong[text()='Height:']/following-sibling::span[1]/text()"
         ).get()
-        if height is not None:
+        if height is not None and not is_na(height):
             try:
-                parsed = parse_height(height)
-                if parsed is not None:
-                    ret["height"] = parsed
+                ret["height"] = parse_height(height)
             except ParseError as e:
                 self.logger.error(e)
 
@@ -187,11 +174,9 @@ class FightersSpider(scrapy.Spider):
         reach = profile_section.xpath(
             "./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text()"
         ).get()
-        if reach is not None:
+        if reach is not None and not is_na(reach):
             try:
-                parsed = parse_reach(reach)
-                if parsed is not None:
-                    ret["reach"] = parsed
+                ret["reach"] = parse_reach(reach)
             except ParseError as e:
                 self.logger.error(e)
 
@@ -285,7 +270,7 @@ class ResultsSpider(scrapy.Spider):
         date_of_birth = profile_section.xpath(
             "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()"
         ).get()
-        if date_of_birth is not None:
+        if date_of_birth is not None and not is_na(date_of_birth):
             try:
                 date_of_birth = normalize_date(date_of_birth)
             except NormalizeError as e:
@@ -342,7 +327,7 @@ class ResultsSpider(scrapy.Spider):
                 date = result_section.xpath(
                     "./div[@class='result']/div[@class='date']/text()"
                 ).get()
-                if date is None:
+                if date is None or is_na(date):
                     continue
                 try:
                     auxiliary["date"] = normalize_date(date)
@@ -376,21 +361,21 @@ class ResultsSpider(scrapy.Spider):
                 record = opponent_section.xpath(
                     "./div[@class='record']/span[@title='Fighter Record Before Fight']/text()"
                 ).get()
-                if record is not None:
+                if record is not None and not is_na(record):
                     try:
                         parsed = parse_record(record)
-                        if parsed is not None:
-                            auxiliary["record_before"] = parsed
-                            auxiliary["record_after"] = parsed
-                            status = auxiliary["status"]
-                            if status == consts.STATUS_WIN:
-                                auxiliary["record_after"]["w"] += 1
-                            elif status == consts.STATUS_LOSS:
-                                auxiliary["record_after"]["l"] += 1
-                            elif status == consts.STATUS_DRAW:
-                                auxiliary["record_after"]["d"] += 1
                     except ParseError as e:
                         self.logger.error(e)
+                    else:
+                        auxiliary["record_before"] = parsed
+                        auxiliary["record_after"] = parsed
+                        status = auxiliary["status"]
+                        if status == consts.STATUS_WIN:
+                            auxiliary["record_after"]["w"] += 1
+                        elif status == consts.STATUS_LOSS:
+                            auxiliary["record_after"]["l"] += 1
+                        elif status == consts.STATUS_DRAW:
+                            auxiliary["record_after"]["d"] += 1
 
                 # Match url (optional)
                 match_url = result_section.xpath(
