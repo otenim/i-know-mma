@@ -69,6 +69,8 @@ SPORT_VALE = "vale"
 SPORT_JUDO = "judo"
 SPORT_COMBAT_JJ = "combat_jj"
 SPORT_CUSTOM = "custom"
+SPORT_TAEK = "taek"
+SPORT_SLAP = "slap"
 SPORTS = [
     SPORT_MMA,
     SPORT_KNUCKLE_MMA,
@@ -87,6 +89,8 @@ SPORTS = [
     SPORT_JUDO,
     SPORT_COMBAT_JJ,
     SPORT_CUSTOM,
+    SPORT_TAEK,
+    SPORT_SLAP,
 ]
 
 

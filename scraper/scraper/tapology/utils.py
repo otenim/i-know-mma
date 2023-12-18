@@ -69,6 +69,10 @@ def normalize_sport(sport: str) -> str:
         return consts.SPORT_JUDO
     if normed in ["combat_jj"]:
         return consts.SPORT_COMBAT_JJ
+    if normed in ["taekwondo"]:
+        return consts.SPORT_TAEK
+    if normed in ["slap"]:
+        return consts.SPORT_SLAP
     if normed in ["custom"]:
         return consts.SPORT_CUSTOM
     raise NormalizeError("sport", sport)
