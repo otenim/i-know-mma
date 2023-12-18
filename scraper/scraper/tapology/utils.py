@@ -128,6 +128,15 @@ def normalize_billing(billing: str) -> str:
     raise NormalizeError("billing", billing)
 
 
+def normalize_division(division: str) -> str:
+    normed = normalize_text(division)
+    if normed.startswith("pro"):
+        return consts.DIVISION_PRO
+    if normed.startswith("am"):
+        return consts.DIVISION_AM
+    raise NormalizeError("division", division)
+
+
 def normalize_date(date: str) -> str:
     normed = normalize_text(date)
     # 2014.09.09
@@ -211,10 +220,24 @@ def parse_round_time(round_time: str) -> dict[str, int]:
 
 def parse_round(round: str) -> int:
     normed = normalize_text(round)
-    matched = re.match(r"^r(\d+)$", normed)
+    matched = re.match(r"r(\d+)", normed)
     if matched is not None:
         return int(matched.group(1))
     raise ParseError("round", round)
+
+
+def parse_billing(billing: str) -> str:
+    normed = normalize_text(billing)
+    matched = re.match(r"(.+) \(fight (\d+) of (\d+)\)", normed)
+    if matched is not None:
+        try:
+            return normalize_billing(matched.group(1))
+        except NormalizeError as e:
+            raise ParseError("billing", billing) from e
+    try:
+        return normalize_billing(normed)
+    except NormalizeError as e:
+        raise ParseError("billing", billing) from e
 
 
 def parse_match_summary(sport: str, status: str, match_summary: str) -> dict:
@@ -443,7 +466,7 @@ def parse_weight(weight: str) -> float | None:
             try:
                 weight_class = normalize_weight_class(matched.group(1))
             except NormalizeError as e:
-                raise ParseError("weight", weight)
+                raise ParseError("weight", weight) from e
             else:
                 return to_weight_limit(weight_class)
     raise ParseError("weight", weight)

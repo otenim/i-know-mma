@@ -1,5 +1,4 @@
 import scrapy
-import re
 from scrapy.http import TextResponse, Request
 from collections.abc import Generator
 from . import consts
@@ -20,6 +19,7 @@ from .utils import (
     parse_title_info,
     parse_age,
     parse_weight,
+    parse_billing,
     to_meter,
     calc_age,
 )
@@ -535,13 +535,49 @@ class ResultsSpider(scrapy.Spider):
             if len(result_sections) == 0:
                 continue
             for result_section in result_sections:
-                data = {}
+                # Stores auxiliary info to pass to parse_result callback
+                auxiliary = {"division": division}
+
+                # Ignore inegligible matches
+                txt = result_section.xpath(
+                    "./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text()"
+                ).get()
+                if txt is not None:
+                    txt = normalize_text(txt)
+                    if txt.startswith("record ineligible"):
+                        continue
 
                 # Result url (must)
                 result_url = result_section.xpath(
                     "./div[@class='result']/div[@class='summary']/div[@class='lead']/a/@href"
                 ).get()
                 if result_url is None:
+                    continue
+
+                # Sport of the match (must)
+                sport = result_section.xpath("./@data-sport").get()
+                if sport is None:
+                    continue
+                try:
+                    auxiliary["sport"] = normalize_sport(sport)
+                except NormalizeError as e:
+                    self.logger.error(e)
+                    continue
+
+                # Ignore matches with status = cancelled, upcoming, unknown
+                status = result_section.xpath("./@data-status").get()
+                if status is None:
+                    continue
+                try:
+                    status = normalize_status(status)
+                except NormalizeError as e:
+                    self.logger.error(e)
+                    continue
+                if status in [
+                    consts.STATUS_CANCELLED,
+                    consts.STATUS_UPCOMING,
+                    consts.STATUS_UNKNOWN,
+                ]:
                     continue
 
                 # More info (optional)
@@ -553,63 +589,26 @@ class ResultsSpider(scrapy.Spider):
                     if label is None:
                         continue
                     label = normalize_text(label)
-                    if label == "billing:":
-                        # Billing of the match
-                        billing = label_section.xpath(
-                            "./following-sibling::span[1]/text()"
-                        ).get()
-                        if billing is not None:
-                            try:
-                                data["billing"] = normalize_billing(billing)
-                            except NormalizeError as e:
-                                self.logger.error(e)
-                    elif label == "duration:":
+                    if label == "duration:":
                         # Round format of the match
                         round_format = label_section.xpath(
                             "./following-sibling::span[1]/text()"
                         ).get()
                         if round_format is not None:
                             try:
-                                data["round_format"] = normalize_round_format(
+                                auxiliary["round_format"] = normalize_round_format(
                                     round_format
                                 )
                             except NormalizeError as e:
                                 self.logger.error(e)
-                    elif label == "referee:":
-                        # Referee of the match
-                        referee = label_section.xpath(
-                            "./following-sibling::span[1]/text()"
-                        ).get()
-                        if referee is not None:
-                            data["referee"] = normalize_text(referee)
-                    elif label == "odds:":
-                        # Odds of the fighter
-                        odds = label_section.xpath(
-                            "./following-sibling::span[1]/text()"
-                        ).get()
-                        if odds is not None:
-                            try:
-                                data["odds"] = parse_odds(odds)
-                            except ParseError as e:
-                                self.logger.error(e)
-                    elif label == "title bout:":
-                        # Title infomation
-                        title_info = label_section.xpath(
-                            "./following-sibling::span[1]/text()"
-                        ).get()
-                        if title_info is not None:
-                            try:
-                                data["title_info"] = parse_title_info(title_info)
-                            except ParseError as e:
-                                self.logger.error(e)
                 req = response.follow(url=result_url, callback=self.parse_result)
-                req.cb_kwargs["data"] = data
+                req.cb_kwargs["auxiliary"] = auxiliary
                 yield req
 
-    def parse_result(self, response: TextResponse, data: dict) -> dict:
+    def parse_result(self, response: TextResponse, auxiliary: dict) -> dict:
         ret = {"url": response.url}
-        for key in data:
-            ret[key] = data[key]
+        for key in auxiliary:
+            ret[key] = auxiliary[key]
         ret["fighter_a"] = {}
         ret["fighter_b"] = {}
 
@@ -664,6 +663,12 @@ class ResultsSpider(scrapy.Spider):
                             ret[f"fighter_{which}"]["weigh_in"] = weigh_in
                     except ParseError as e:
                         self.logger.error(e)
+                elif category == "betting odds":
+                    try:
+                        odds = parse_odds(category_data)
+                        ret[f"fighter_{which}"]["odds"] = odds
+                    except ParseError as e:
+                        self.logger.error(e)
 
         # Bout infomation
         info_sections = response.xpath(
@@ -689,7 +694,17 @@ class ResultsSpider(scrapy.Spider):
                 enclosure = info_section.xpath("./span/text()").get()
                 if enclosure is not None:
                     ret["enclosure"] = normalize_text(enclosure)
-        # Record before fight
+            elif label == "referee:":
+                referee = info_section.xpath("./span/text()").get()
+                if referee is not None:
+                    ret["referee"] = normalize_text(referee)
+            elif label == "bout billing:":
+                billing = info_section.xpath("./span/text()").get()
+                if billing is not None:
+                    try:
+                        ret["billing"] = parse_billing(billing)
+                    except ParseError as e:
+                        self.logger.error(e)
         return ret
 
 
