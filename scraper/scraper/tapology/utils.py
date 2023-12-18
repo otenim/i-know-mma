@@ -399,7 +399,9 @@ def parse_record(record: str) -> dict[str, int] | None:
     normed = normalize_text(record)
     if "n/a" in normed or normed == "":
         return None
-    matched = re.match(r"^(?:climbed to |fell to )?(\d+)-(\d+)(?:-(\d+))?", normed)
+    matched = re.match(
+        r"^(?:climbed to |fell to |moved to |stayed at )?(\d+)-(\d+)(?:-(\d+))?", normed
+    )
     if matched is not None:
         d = matched.group(3)
         return {
@@ -408,6 +410,44 @@ def parse_record(record: str) -> dict[str, int] | None:
             "d": 0 if d is None else int(d),
         }
     raise ParseError("record", record)
+
+
+def parse_age(age: str) -> float | None:
+    normed = normalize_text(age)
+    if "n/a" in normed or normed == "":
+        return None
+    matched = re.match(
+        r"^(\d+) years(?:, (\d+) months?)?(?:, (\d+) weeks?)?(?:, (\d+) days?)?", normed
+    )
+    if matched is not None:
+        age = float(matched.group(1))
+        if matched.group(2) is not None:
+            age += float(matched.group(2)) / 12
+        if matched.group(3) is not None:
+            age += float(matched.group(3)) / 52.1429
+        if matched.group(4) is not None:
+            age += float(matched.group(4)) / 365.25
+        return age
+    raise ParseError("age", age)
+
+
+def parse_weight(weight: str) -> float | None:
+    normed = normalize_text(weight)
+    if "n/a" in normed or normed == "":
+        return None
+    matched = re.match(r"^(.*weight|([\d\.]+) (kgs?|lbs?))", normed)
+    if matched is not None:
+        if matched.group(2) is not None and matched.group(3) is not None:
+            value, unit = float(matched.group(2)), matched.group(3)
+            return to_kg(value, unit=unit)
+        else:
+            try:
+                weight_class = normalize_weight_class(matched.group(1))
+            except NormalizeError as e:
+                raise ParseError("weight", weight)
+            else:
+                return to_weight_limit(weight_class)
+    raise ParseError("weight", weight)
 
 
 def parse_round_format(round_format: str) -> dict:

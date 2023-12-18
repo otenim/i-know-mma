@@ -18,6 +18,8 @@ from .utils import (
     parse_weight_summary,
     parse_odds,
     parse_title_info,
+    parse_age,
+    parse_weight,
     to_meter,
     calc_age,
 )
@@ -636,20 +638,32 @@ class ResultsSpider(scrapy.Spider):
                     continue
                 if category == "pro record at fight":
                     try:
-                        parsed = parse_record(category_data)
-                        if parsed is not None:
-                            ret[f"fighter_{which}"]["record_before_match"] = parsed
+                        record = parse_record(category_data)
+                        if record is not None:
+                            ret[f"fighter_{which}"]["record_before_match"] = record
                     except ParseError as e:
                         self.logger.error(e)
                 elif category == "record after fight":
                     try:
-                        parsed = parse_record(category_data)
-                        if parsed is not None:
-                            ret[f"fighter_{which}"]["record_after_match"] = parsed
+                        record = parse_record(category_data)
+                        if record is not None:
+                            ret[f"fighter_{which}"]["record_after_match"] = record
                     except ParseError as e:
                         self.logger.error(e)
                 elif category == "age at fight":
-                    pass
+                    try:
+                        age = parse_age(category_data)
+                        if age is not None:
+                            ret[f"fighter_{which}"]["age"] = age
+                    except ParseError as e:
+                        self.logger.error(e)
+                elif category == "weigh-in result":
+                    try:
+                        weigh_in = parse_weight(category_data)
+                        if weigh_in is not None:
+                            ret[f"fighter_{which}"]["weigh_in"] = weigh_in
+                    except ParseError as e:
+                        self.logger.error(e)
 
         # Record before fight
         return ret
