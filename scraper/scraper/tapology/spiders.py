@@ -665,6 +665,30 @@ class ResultsSpider(scrapy.Spider):
                     except ParseError as e:
                         self.logger.error(e)
 
+        # Bout infomation
+        info_sections = response.xpath(
+            "//div[@class='details details_with_poster clearfix']/div[@class='right']/ul[@class='clearfix']/li"
+        )[1:]
+        for info_section in info_sections:
+            label = info_section.xpath("./strong/text()").get()
+            if label is None:
+                continue
+            label = normalize_text(label)
+            if label == "event:":
+                event = info_section.xpath("./span/a/@href").get()
+                if event is not None:
+                    ret["event"] = response.urljoin(event)
+            elif label == "date:":
+                date = info_section.xpath("./span/text()").get()
+                if date is not None:
+                    try:
+                        ret["date"] = normalize_date(date)
+                    except NormalizeError as e:
+                        self.logger.error(e)
+            elif label == "enclosure:":
+                enclosure = info_section.xpath("./span/text()").get()
+                if enclosure is not None:
+                    ret["enclosure"] = normalize_text(enclosure)
         # Record before fight
         return ret
 

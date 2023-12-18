@@ -131,13 +131,13 @@ def normalize_billing(billing: str) -> str:
 def normalize_date(date: str) -> str:
     normed = normalize_text(date)
     # 2014.09.09
-    matched = re.match(r"^(\d+)\.(\d+)\.(\d+)$", normed)
+    matched = re.search(r"(\d{4})\.(\d{2})\.(\d{2})", normed)
     if matched is not None:
         return f"{matched.group(1):04}-{matched.group(2):02}-{matched.group(3):02}"
-    # 2014-09-09
-    matched = re.match(r"^(\d+)\-(\d+)\-(\d+)$", normed)
+    # 09.09.2014
+    matched = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", normed)
     if matched is not None:
-        f"{matched.group(1):04}-{matched.group(2):02}-{matched.group(3):02}"
+        return f"{matched.group(3):04}-{matched.group(1):02}-{matched.group(2):02}"
     raise NormalizeError("date", date)
 
 
@@ -146,19 +146,19 @@ def normalize_round_format(round_format: str) -> str:
 
     # 5 x 5 minute rounds
     # 5 x 5 min
-    matched = re.match(r"^(\d+) x (\d+)", normed)
+    matched = re.match(r"(\d+) x (\d+)", normed)
     if matched is not None:
         format = "-".join([matched.group(2) for _ in range(int(matched.group(1)))])
         return format
 
     # 5 min one round
-    matched = re.match(r"^(\d+) min one round$", normed)
+    matched = re.match(r"(\d+) min one round$", normed)
     if matched is not None:
         format = matched.group(1)
         return format
 
     # 5 min round plus overtime
-    matched = re.match(r"^(\d+) min round plus overtime$", normed)
+    matched = re.match(r"(\d+) min round plus overtime$", normed)
     if matched is not None:
         format = f"{matched.group(1)}-ot"
         return format
@@ -170,7 +170,7 @@ def normalize_round_format(round_format: str) -> str:
     # 5-5-5 plus overtime
     # 5-5-5-5 plus overtime
     # 5-5 two rounds
-    matched = re.match(r"^(\d+(?:\-\d+)+)( plus overtime)?", normed)
+    matched = re.match(r"(\d+(?:\-\d+)+)( plus overtime)?", normed)
     if matched is not None:
         format = matched.group(1)
         if matched.group(2) is not None:
@@ -179,24 +179,23 @@ def normalize_round_format(round_format: str) -> str:
 
     # 5 + 5 two rounds
     # 5 + 5 + 5 three rounds
-    matched = re.match(r"^(\d+(?: \+ \d+)+)", normed)
+    matched = re.match(r"(\d+(?: \+ \d+)+)", normed)
     if matched is not None:
         format = "-".join(list(map(lambda x: x.strip(), matched.group(1).split("+"))))
         return format
 
     # 5 min unlim rounds
-    matched = re.match(r"^(\d+) min unlim rounds$", normed)
+    matched = re.match(r"(\d+) min unlim rounds", normed)
     if matched is not None:
         format = matched.group(1) + "-*"
         return format
 
     # 1 Round, No Limit
-    matched = re.match(r"^1 round, no limit$", normed)
-    if matched is not None:
+    if normed == "1 round, no limit":
         return "*"
 
     # 3 Rounds
-    matched = re.match(r"^(\d+) rounds$", normed)
+    matched = re.match(r"(\d+) rounds", normed)
     if matched is not None:
         return "-".join(["?"] * int(matched.group(1)))
     raise NormalizeError("round format", round_format)
@@ -417,7 +416,7 @@ def parse_age(age: str) -> float | None:
     if "n/a" in normed or normed == "":
         return None
     matched = re.match(
-        r"^(\d+) years(?:, (\d+) months?)?(?:, (\d+) weeks?)?(?:, (\d+) days?)?", normed
+        r"(\d+) years(?:, (\d+) months?)?(?:, (\d+) weeks?)?(?:, (\d+) days?)?", normed
     )
     if matched is not None:
         age = float(matched.group(1))
@@ -435,7 +434,7 @@ def parse_weight(weight: str) -> float | None:
     normed = normalize_text(weight)
     if "n/a" in normed or normed == "":
         return None
-    matched = re.match(r"^(.*weight|([\d\.]+) (kgs?|lbs?))", normed)
+    matched = re.match(r"(.*weight|([\d\.]+) (kgs?|lbs?))", normed)
     if matched is not None:
         if matched.group(2) is not None and matched.group(3) is not None:
             value, unit = float(matched.group(2)), matched.group(3)
