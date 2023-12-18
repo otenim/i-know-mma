@@ -395,14 +395,17 @@ def parse_last_weigh_in(last_weigh_in: str) -> float | None:
     raise ParseError("last weigh-in", last_weigh_in)
 
 
-def parse_record(record: str) -> dict[str, int]:
+def parse_record(record: str) -> dict[str, int] | None:
     normed = normalize_text(record)
-    matched = re.match(r"^(\d+)-(\d+)-(\d+)", normed)
+    if "n/a" in normed or normed == "":
+        return None
+    matched = re.match(r"^(?:climbed to |fell to )?(\d+)-(\d+)(?:-(\d+))?", normed)
     if matched is not None:
+        d = matched.group(3)
         return {
             "w": int(matched.group(1)),
             "l": int(matched.group(2)),
-            "d": int(matched.group(3)),
+            "d": 0 if d is None else int(d),
         }
     raise ParseError("record", record)
 

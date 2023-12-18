@@ -44,7 +44,7 @@ class FightersSpider(scrapy.Spider):
         *args,
         **kwargs,
     ) -> None:
-        super(FightersSpider, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def parse(self, response: TextResponse) -> Generator[Request, None, None]:
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
@@ -487,14 +487,182 @@ class FightersSpider(scrapy.Spider):
         return ret
 
 
+class ResultsSpider(scrapy.Spider):
+    name = "results"
+    start_urls = [
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Atomweight-105-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Strawweight-115-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Flyweight-125-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Bantamweight-135-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Featherweight-145-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Lightweight-155-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Welterweight-170-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Middleweight-185-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Light_Heavyweight-205-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Heavyweight-265-pounds",
+        "https://www.tapology.com/search/mma-fighters-by-weight-class/Super_Heavyweight-over-265-pounds",
+    ]
+
+    def __init__(
+        self,
+        *args,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+
+    def parse(self, response: TextResponse) -> Generator[Request, None, None]:
+        fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
+        for fighter in fighters:
+            url = fighter.xpath("./td[1]/a/@href").get()
+            if url is not None:
+                yield response.follow(url, callback=self.parse_fighter)
+
+        # Move to the next page
+        next_url = response.xpath(
+            "//span[@class='moreLink']/nav[@class='pagination']/span[@class='next']/a/@href"
+        ).get()
+        if next_url is not None:
+            yield response.follow(next_url, callback=self.parse)
+
+    def parse_fighter(self, response: TextResponse) -> Generator[Request, None, None]:
+        # Parse results
+        for division in [consts.DIVISION_PRO, consts.DIVISION_AM]:
+            result_sections = response.xpath(
+                f"//section[@class='fighterFightResults']/ul[@id='{division}Results']/li"
+            )
+            if len(result_sections) == 0:
+                continue
+            for result_section in result_sections:
+                data = {}
+
+                # Result url (must)
+                result_url = result_section.xpath(
+                    "./div[@class='result']/div[@class='summary']/div[@class='lead']/a/@href"
+                ).get()
+                if result_url is None:
+                    continue
+
+                # More info (optional)
+                label_sections = result_section.xpath(
+                    "./div[@class='details tall']/div[@class='div']/span[@class='label']"
+                )
+                for label_section in label_sections:
+                    label = label_section.xpath("./text()").get()
+                    if label is None:
+                        continue
+                    label = normalize_text(label)
+                    if label == "billing:":
+                        # Billing of the match
+                        billing = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if billing is not None:
+                            try:
+                                data["billing"] = normalize_billing(billing)
+                            except NormalizeError as e:
+                                self.logger.error(e)
+                    elif label == "duration:":
+                        # Round format of the match
+                        round_format = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if round_format is not None:
+                            try:
+                                data["round_format"] = normalize_round_format(
+                                    round_format
+                                )
+                            except NormalizeError as e:
+                                self.logger.error(e)
+                    elif label == "referee:":
+                        # Referee of the match
+                        referee = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if referee is not None:
+                            data["referee"] = normalize_text(referee)
+                    elif label == "odds:":
+                        # Odds of the fighter
+                        odds = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if odds is not None:
+                            try:
+                                data["odds"] = parse_odds(odds)
+                            except ParseError as e:
+                                self.logger.error(e)
+                    elif label == "title bout:":
+                        # Title infomation
+                        title_info = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if title_info is not None:
+                            try:
+                                data["title_info"] = parse_title_info(title_info)
+                            except ParseError as e:
+                                self.logger.error(e)
+                req = response.follow(url=result_url, callback=self.parse_result)
+                req.cb_kwargs["data"] = data
+                yield req
+
+    def parse_result(self, response: TextResponse, data: dict) -> dict:
+        ret = {"url": response.url}
+        for key in data:
+            ret[key] = data[key]
+        ret["fighter_a"] = {}
+        ret["fighter_b"] = {}
+
+        # Fighter URLs (must)
+        for which in ["a", "b"]:
+            fighter_url = response.xpath(
+                f"//span[@class='fName {'left' if which == 'a' else 'right'}']/a/@href"
+            ).get()
+            if fighter_url is not None:
+                ret[f"fighter_{which}"]["url"] = response.urljoin(fighter_url)
+
+        # TOT (tale of tape) sections
+        tot_sections = response.xpath(
+            "//div[@class='boutComparisonTable']/table[@class='fighterStats spaced']/tr"
+        )
+        for which in ["a", "b"]:
+            for tot_section in tot_sections:
+                category = tot_section.xpath("./td[@class='category']/text()").get()
+                if category is None:
+                    continue
+                category = normalize_text(category)
+                category_data = tot_section.xpath(
+                    f"./td[{'1' if which == 'a' else 'last()'}]/text()"
+                ).get()
+                if category_data is None:
+                    continue
+                if category == "pro record at fight":
+                    try:
+                        parsed = parse_record(category_data)
+                        if parsed is not None:
+                            ret[f"fighter_{which}"]["record_before_match"] = parsed
+                    except ParseError as e:
+                        self.logger.error(e)
+                elif category == "record after fight":
+                    try:
+                        parsed = parse_record(category_data)
+                        if parsed is not None:
+                            ret[f"fighter_{which}"]["record_after_match"] = parsed
+                    except ParseError as e:
+                        self.logger.error(e)
+                elif category == "age at fight":
+                    pass
+
+        # Record before fight
+        return ret
+
+
 class PromotionsSpider(scrapy.Spider):
     name = "promotions"
     start_urls = ["https://www.tapology.com/fightcenter/promotions"]
 
-    def __init__(self, *args, **kwargs) -> Generator[dict | Request, None, None]:
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-    def parse(self, response: TextResponse):
+    def parse(self, response: TextResponse) -> Generator[dict | Request, None, None]:
         promotions = response.xpath(
             "//div[@class='promotionsIndex']/ul[@class='promotions']/li"
         )
