@@ -4,6 +4,13 @@ from . import consts
 from .errors import NormalizeError, ParseError, InferError
 
 
+def is_na(text: str) -> str:
+    normed = normalize_text(text)
+    if normed in ["n/a", ""]:
+        return True
+    return False
+
+
 def normalize_text(text: str, lower: bool = True) -> str:
     text = " ".join(text.split())
     text = text.replace("\n", "").replace("\t", "")
@@ -30,7 +37,7 @@ def normalize_status(status: str) -> str:
         return consts.STATUS_UPCOMING
     if normed in ["unknown", "n/a", "na"]:
         return consts.STATUS_UNKNOWN
-    raise NormalizeError("status", status)
+    raise NormalizeError("status", normed)
 
 
 def normalize_sport(sport: str) -> str:
@@ -75,11 +82,13 @@ def normalize_sport(sport: str) -> str:
         return consts.SPORT_SLAP
     if normed in ["custom"]:
         return consts.SPORT_CUSTOM
-    raise NormalizeError("sport", sport)
+    raise NormalizeError("sport", normed)
 
 
-def normalize_weight_class(weight_class: str) -> str:
+def normalize_weight_class(weight_class: str) -> str | None:
     normed = normalize_text(weight_class)
+    if is_na(normed):
+        return None
     if normed in consts.WEIGHT_CLASSES:
         return normed
     if normed in ["atomweight"]:
@@ -112,7 +121,7 @@ def normalize_weight_class(weight_class: str) -> str:
         return consts.WEIGHT_CLASS_CRUISER
     if normed in ["super heavyweight"]:
         return consts.WEIGHT_CLASS_S_HEAVY
-    raise NormalizeError("weight class", weight_class)
+    raise NormalizeError("weight class", normed)
 
 
 def normalize_billing(billing: str) -> str:
@@ -129,7 +138,7 @@ def normalize_billing(billing: str) -> str:
         return consts.BILLING_PRELIM_CARD
     if normed in ["postlim"]:
         return consts.BILLING_POSTLIM_CARD
-    raise NormalizeError("billing", billing)
+    raise NormalizeError("billing", normed)
 
 
 def normalize_division(division: str) -> str:
@@ -138,11 +147,13 @@ def normalize_division(division: str) -> str:
         return consts.DIVISION_PRO
     if normed.startswith("am"):
         return consts.DIVISION_AM
-    raise NormalizeError("division", division)
+    raise NormalizeError("division", normed)
 
 
-def normalize_date(date: str) -> str:
+def normalize_date(date: str) -> str | None:
     normed = normalize_text(date)
+    if is_na(normed):
+        return None
     # 2014.09.09
     matched = re.search(r"(\d{4})\.(\d{2})\.(\d{2})", normed)
     if matched is not None:
@@ -151,7 +162,7 @@ def normalize_date(date: str) -> str:
     matched = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", normed)
     if matched is not None:
         return f"{matched.group(3):04}-{matched.group(1):02}-{matched.group(2):02}"
-    raise NormalizeError("date", date)
+    raise NormalizeError("date", normed)
 
 
 def normalize_round_format(round_format: str) -> str:
@@ -211,7 +222,7 @@ def normalize_round_format(round_format: str) -> str:
     matched = re.match(r"(\d+) rounds", normed)
     if matched is not None:
         return "-".join(["?"] * int(matched.group(1)))
-    raise NormalizeError("round format", round_format)
+    raise NormalizeError("round format", normed)
 
 
 def parse_round_time(round_time: str) -> dict[str, int]:
@@ -219,7 +230,7 @@ def parse_round_time(round_time: str) -> dict[str, int]:
     matched = re.match(r"^(\d+):(\d+)$", normed)
     if matched is not None:
         return {"m": int(matched.group(1)), "s": int(matched.group(2))}
-    raise ParseError("round time", round_time)
+    raise ParseError("round time", normed)
 
 
 def parse_round(round: str) -> int:
@@ -227,21 +238,17 @@ def parse_round(round: str) -> int:
     matched = re.match(r"r(\d+)", normed)
     if matched is not None:
         return int(matched.group(1))
-    raise ParseError("round", round)
+    raise ParseError("round", normed)
 
 
-def parse_billing(billing: str) -> str:
-    normed = normalize_text(billing)
-    matched = re.match(r"(.+) \(fight (\d+) of (\d+)\)", normed)
+def parse_nickname(nickname: str) -> str | None:
+    normed = normalize_text(nickname)
+    if is_na(normed):
+        return None
+    matched = re.match(r"\"(.+)\"", normed)
     if matched is not None:
-        try:
-            return normalize_billing(matched.group(1))
-        except NormalizeError as e:
-            raise ParseError("billing", billing) from e
-    try:
-        return normalize_billing(normed)
-    except NormalizeError as e:
-        raise ParseError("billing", billing) from e
+        return matched.group(1)
+    raise ParseError("nickname", normed)
 
 
 def parse_match_summary(sport: str, status: str, match_summary: str) -> dict:
@@ -329,8 +336,8 @@ def parse_match_summary(sport: str, status: str, match_summary: str) -> dict:
         ParseError,
         InferError,
     ):
-        raise ParseError("match summary", match_summary)
-    raise ParseError("match summary", match_summary)
+        raise ParseError("match summary", normed)
+    raise ParseError("match summary", normed)
 
 
 def parse_title_info(title_info: str) -> dict[str, str]:
@@ -347,7 +354,7 @@ def parse_title_info(title_info: str) -> dict[str, str]:
     elif len(normed_split) == 1:
         # Tournament Championship
         return {"for": normed_split[0]}
-    raise ParseError("title info", title_info)
+    raise ParseError("title info", normed)
 
 
 def parse_odds(odds: str) -> float:
@@ -355,14 +362,14 @@ def parse_odds(odds: str) -> float:
 
     # +210 · Moderate Underdog
     # 0 · Close
-    matched = re.match(r"^([\+\-])?([\d\.]+)", normed)
+    matched = re.search(r"([\+\-])?([\d\.]+)", normed)
     if matched is not None:
         value = float(matched.group(2))
         sign = matched.group(1)
         if sign == "-":
             value *= -1
         return (value / 100) + 1.0
-    raise ParseError("odds", odds)
+    raise ParseError("odds", normed)
 
 
 def parse_weight_summary(weight_summary: str) -> dict[str, float]:
@@ -373,9 +380,9 @@ def parse_weight_summary(weight_summary: str) -> dict[str, float]:
     # Heavyweight
     # 110 kg|kgs|lb|lbs
     # 110 kg|kgs|lb|lbs (49.9 kg|kgs|lb|lbs)
-    matched = re.match(r"^(.*weight|([\d\.]+) (kgs?|lbs?))", normed_split[0])
+    matched = re.match(r"(.*weight|([\d\.]+) (kgs?|lbs?))", normed_split[0])
     if matched is None:
-        raise ParseError("weight summary", weight_summary)
+        raise ParseError("weight summary", normed)
     if matched.group(2) is not None and matched.group(3) is not None:
         value, unit = float(matched.group(2)), matched.group(3)
         ret["class"] = to_weight_class(value, unit=unit)
@@ -390,11 +397,11 @@ def parse_weight_summary(weight_summary: str) -> dict[str, float]:
     for s in normed_split[1:]:
         # 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
         # Weigh-In 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
-        matched = re.match(r"^(weigh-in )?([\d\.]+) (kgs?|lbs?)", s)
+        matched = re.match(r"(weigh-in )?([\d\.]+) (kgs?|lbs?)", s)
         if matched is None:
-            raise ParseError("weight summary", weight_summary)
+            raise ParseError("weight summary", normed)
         if matched.group(2) is None or matched.group(3) is None:
-            raise ParseError("weight summary", weight_summary)
+            raise ParseError("weight summary", normed)
         value, unit = float(matched.group(2)), matched.group(3)
         ret["limit" if matched.group(1) is None else "weigh_in"] = to_kg(
             value, unit=unit
@@ -404,26 +411,62 @@ def parse_weight_summary(weight_summary: str) -> dict[str, float]:
             ret["class"] = to_weight_class(ret["limit"])
         elif "weigh_in" in ret:
             ret["class"] = to_weight_class(ret["weigh_in"])
+    if "class" in ret and "limit" not in ret:
+        ret["limit"] = to_weight_limit(ret["class"])
     if ret == {}:
-        raise ParseError("weight summary", weight_summary)
+        raise ParseError("weight summary", normed)
     return ret
+
+
+def get_id_from_url(url: str) -> str:
+    return url.split("/")[-1]
 
 
 def parse_last_weigh_in(last_weigh_in: str) -> float | None:
     normed = normalize_text(last_weigh_in)
-    matched = re.match(r"^([\d\.]+) (kgs?|lbs?)", normed)
+    if is_na(normed):
+        return None
+    matched = re.match(r"([\d\.]+) (kgs?|lbs?)", normed)
     if matched is not None:
         value = float(matched.group(1))
         unit = matched.group(2)
         return to_kg(value, unit=unit)
-    if normed in consts.VALUES_NOT_AVAILABLE:
+    raise ParseError("last weigh-in", normed)
+
+
+def parse_height(height: str) -> float | None:
+    normed = normalize_text(height)
+    if is_na(normed):
         return None
-    raise ParseError("last weigh-in", last_weigh_in)
+    matched = re.search(r"([\d\.]+)\'([\d\.]+)\"", normed)
+    if matched is not None:
+        return to_meter(float(matched.group(1)), float(matched.group(2)))
+    raise ParseError("height", normed)
+
+
+def parse_reach(reach: str) -> float | None:
+    normed = normalize_text(reach)
+    if is_na(normed):
+        return None
+    matched = re.search(r"([\d\.]+)\"", normed)
+    if matched is not None:
+        return to_meter(0, float(matched.group(1)))
+    raise ParseError("reach", normed)
+
+
+def parse_earnings(earnings: str) -> int | None:
+    normed = normalize_text(earnings)
+    if is_na(normed):
+        return None
+    matched = re.search(r"\$([\d\,]+)", normed)
+    if matched is not None:
+        return int(matched.group(1).replace(",", ""))
+    raise ParseError("earnings", normed)
 
 
 def parse_record(record: str) -> dict[str, int] | None:
     normed = normalize_text(record)
-    if "n/a" in normed or normed == "":
+    if is_na(normed):
         return None
     matched = re.match(
         r"^(?:climbed to |fell to |moved to |stayed at )?(\d+)-(\d+)(?:-(\d+))?", normed
@@ -435,45 +478,7 @@ def parse_record(record: str) -> dict[str, int] | None:
             "l": int(matched.group(2)),
             "d": 0 if d is None else int(d),
         }
-    raise ParseError("record", record)
-
-
-def parse_age(age: str) -> float | None:
-    normed = normalize_text(age)
-    if "n/a" in normed or normed == "":
-        return None
-    matched = re.match(
-        r"(\d+) years(?:, (\d+) months?)?(?:, (\d+) weeks?)?(?:, (\d+) days?)?", normed
-    )
-    if matched is not None:
-        age = float(matched.group(1))
-        if matched.group(2) is not None:
-            age += float(matched.group(2)) / 12
-        if matched.group(3) is not None:
-            age += float(matched.group(3)) / 52.1429
-        if matched.group(4) is not None:
-            age += float(matched.group(4)) / 365.25
-        return age
-    raise ParseError("age", age)
-
-
-def parse_weight(weight: str) -> float | None:
-    normed = normalize_text(weight)
-    if "n/a" in normed or normed == "":
-        return None
-    matched = re.match(r"(.*weight|([\d\.]+) (kgs?|lbs?))", normed)
-    if matched is not None:
-        if matched.group(2) is not None and matched.group(3) is not None:
-            value, unit = float(matched.group(2)), matched.group(3)
-            return to_kg(value, unit=unit)
-        else:
-            try:
-                weight_class = normalize_weight_class(matched.group(1))
-            except NormalizeError as e:
-                raise ParseError("weight", weight) from e
-            else:
-                return to_weight_limit(weight_class)
-    raise ParseError("weight", weight)
+    raise ParseError("record", normed)
 
 
 def parse_round_format(round_format: str) -> dict:

@@ -12,16 +12,17 @@ from .utils import (
     normalize_billing,
     normalize_round_format,
     parse_last_weigh_in,
-    parse_match_summary,
+    parse_nickname,
     parse_record,
+    parse_earnings,
+    parse_height,
+    parse_reach,
     parse_weight_summary,
     parse_odds,
     parse_title_info,
-    parse_age,
-    parse_weight,
-    parse_billing,
-    to_meter,
+    is_na,
     calc_age,
+    get_id_from_url,
 )
 
 
@@ -66,25 +67,19 @@ class FightersSpider(scrapy.Spider):
         ret = {}
 
         # Fighter ID (must)
-        ret["url"] = response.url
+        ret["id"] = get_id_from_url(response.url)
 
-        # Fighter name (must)
+        # Fighter name (optional)
         name = response.xpath(
             "//div[@class='fighterUpcomingHeader']/h1[not(@*)]/text()"
         ).get()
-        if name is None:
-            self.logger.error(
-                "Unexpected page structure: could not find the fighter's name"
-            )
+        if name is None or is_na(name):
             return
         ret["name"] = normalize_text(name)
 
         # Parse header section (must)
         header_section = response.xpath("//div[@class='fighterUpcomingHeader']")
         if len(header_section) == 0:
-            self.logger.error(
-                "Unexpected page structure: could not find the header section"
-            )
             return
 
         # Nationality (optional)
@@ -95,27 +90,29 @@ class FightersSpider(scrapy.Spider):
             ret["nationality"] = normalize_text(nationality)
 
         # Nickname (optional)
-        nickname = header_section.xpath(
-            "./h4[@class='preTitle nickname']/text()"
-        ).re_first(r"\"(.*)\"")
+        nickname = header_section.xpath("./h4[@class='preTitle nickname']/text()").get()
         if nickname is not None:
-            ret["nickname"] = normalize_text(nickname)
+            try:
+                parsed = parse_nickname(nickname)
+                if parsed is not None:
+                    ret["nickname"] = parsed
+            except ParseError as e:
+                self.logger.error(e)
 
         # Parse profile section (must)
         profile_section = response.xpath("//div[@class='details details_two_columns']")
         if len(profile_section) == 0:
-            self.logger.error(
-                "Unexpected page structure: could not find the profile section"
-            )
             return
 
         # Pro mma record (optional)
-        career_record = profile_section.xpath(
+        record = profile_section.xpath(
             "./ul/li/strong[text()='Pro MMA Record:']/following-sibling::span[1]/text()"
         ).get()
-        if career_record is not None:
+        if record is not None:
             try:
-                ret["career_record"] = parse_record(career_record)
+                parsed = parse_record(record)
+                if parsed is not None:
+                    ret["record"] = parsed
             except ParseError as e:
                 self.logger.error(e)
 
@@ -124,12 +121,12 @@ class FightersSpider(scrapy.Spider):
             "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()"
         ).get()
         if date_of_birth is not None:
-            date_of_birth = normalize_text(date_of_birth)
-            if date_of_birth not in consts.VALUES_NOT_AVAILABLE:
-                try:
-                    ret["date_of_birth"] = normalize_date(date_of_birth)
-                except NormalizeError as e:
-                    self.logger.error(e)
+            try:
+                parsed = normalize_date(date_of_birth)
+                if parsed is not None:
+                    ret["date_of_birth"] = parsed
+            except NormalizeError as e:
+                self.logger.error(e)
 
         # Weight class (optional)
         weight_class = profile_section.xpath(
@@ -137,7 +134,9 @@ class FightersSpider(scrapy.Spider):
         ).get()
         if weight_class is not None:
             try:
-                ret["weight_class"] = normalize_weight_class(weight_class)
+                normed = normalize_weight_class(weight_class)
+                if normed is not None:
+                    ret["weight_class"] = normed
             except NormalizeError as e:
                 self.logger.error(e)
 
@@ -154,338 +153,88 @@ class FightersSpider(scrapy.Spider):
                 self.logger.error(e)
 
         # Career disclosed earnings (optional)
-        career_earnings = profile_section.xpath(
+        earnings = profile_section.xpath(
             "./ul/li/strong[text()='Career Disclosed Earnings:']/following-sibling::span[1]/text()"
-        ).re_first(r"^\$(.*) USD")
-        if career_earnings is not None:
-            ret["career_earnings"] = int(career_earnings.replace(",", ""))
+        ).get()
+        if earnings is not None:
+            try:
+                parsed = parse_earnings(earnings)
+                if parsed is not None:
+                    ret["earnings"] = parsed
+            except ParseError as e:
+                self.logger.error(e)
 
         # Affiliation (optional)
-        affili_section = profile_section.xpath(
-            "./ul/li/strong[text()='Affiliation:']/following-sibling::span[1]/a"
-        )
-        if len(affili_section) == 1:
-            url = affili_section.xpath("./@href").get()
-            if url is not None:
-                ret["affiliation"] = response.urljoin(url)
+        affili_url = profile_section.xpath(
+            "./ul/li/strong[text()='Affiliation:']/following-sibling::span[1]/a/@href"
+        ).get()
+        if affili_url is not None:
+            ret["affiliation"] = get_id_from_url(affili_url)
 
         # Height (optional)
-        # e.g. "5\'9\" (175cm)"
         height = profile_section.xpath(
             "./ul/li/strong[text()='Height:']/following-sibling::span[1]/text()"
-        ).re(r"([\d\.]+)\'([\d\.]+)\"")
-        if len(height) == 2:
-            ret["height"] = to_meter(float(height[0]), float(height[1]))
+        ).get()
+        if height is not None:
+            try:
+                parsed = parse_height(height)
+                if parsed is not None:
+                    ret["height"] = parsed
+            except ParseError as e:
+                self.logger.error(e)
 
         # Reach (optional)
-        # e.g. "74.0\" (188cm)"
         reach = profile_section.xpath(
             "./ul/li/strong[text()='| Reach:']/following-sibling::span[1]/text()"
-        ).re(r"([\d\.]+)\"")
-        if len(reach) == 1:
-            ret["reach"] = to_meter(0, float(reach[0]))
+        ).get()
+        if reach is not None:
+            try:
+                parsed = parse_reach(reach)
+                if parsed is not None:
+                    ret["reach"] = parsed
+            except ParseError as e:
+                self.logger.error(e)
 
         # College (optional)
         college = profile_section.xpath(
             "./ul/li/strong[text()='College:']/following-sibling::span[1]/text()"
         ).get()
-        if college is not None:
-            college = normalize_text(college)
-            if college not in consts.VALUES_NOT_AVAILABLE:
-                ret["college"] = college
+        if college is not None and not is_na(college):
+            ret["college"] = normalize_text(college)
 
         # Foundation styles (optional)
         styles = profile_section.xpath(
             "./ul/li/strong[text()='Foundation Style:']/following-sibling::span[1]/text()"
         ).get()
-        if styles is not None:
-            styles = normalize_text(styles)
-            if styles not in consts.VALUES_NOT_AVAILABLE:
-                ret["foundation_styles"] = []
-                for s in styles.split(","):
-                    ret["foundation_styles"].append(s.strip())
+        if styles is not None and not is_na(styles):
+            ret["foundation_styles"] = []
+            for s in normalize_text(styles).split(","):
+                ret["foundation_styles"].append(s.strip())
 
         # Place of born (optional)
         born = profile_section.xpath(
             "./ul/li/strong[text()='Born:']/following-sibling::span[1]/text()"
         ).get()
-        if born is not None:
-            born = normalize_text(born)
-            if born not in consts.VALUES_NOT_AVAILABLE:
-                ret["born"] = []
-                for p in born.split(","):
-                    ret["born"].append(p.strip())
+        if born is not None and not is_na(born):
+            ret["born"] = []
+            for p in normalize_text(born).split(","):
+                ret["born"].append(p.strip())
 
         # Fighting out of (optional)
         out_of = profile_section.xpath(
             "./ul/li/strong[text()='Fighting out of:']/following-sibling::span[1]/text()"
         ).get()
-        if out_of is not None:
-            out_of = normalize_text(out_of)
-            if out_of not in consts.VALUES_NOT_AVAILABLE:
-                ret["out_of"] = []
-                for o in out_of.split(","):
-                    ret["out_of"].append(o.strip())
+        if out_of is not None and not is_na(out_of):
+            ret["out_of"] = []
+            for o in normalize_text(out_of).split(","):
+                ret["out_of"].append(o.strip())
 
         # Head Coach (optional)
         head_coach = profile_section.xpath(
             "./ul/li/strong[text()='Head Coach:']/following-sibling::span[1]/text()"
         ).get()
-        if head_coach is not None:
-            head_coach = normalize_text(head_coach)
-            if head_coach not in consts.VALUES_NOT_AVAILABLE:
-                ret["head_coach"] = head_coach
-
-        # Parse results
-        ret["results"] = []
-        for division in [consts.DIVISION_PRO, consts.DIVISION_AM]:
-            result_sections = response.xpath(
-                f"//section[@class='fighterFightResults']/ul[@id='{division}Results']/li"
-            )
-            if len(result_sections) == 0:
-                continue
-            for result_section in result_sections:
-                # Stores data of the match
-                item = {"division": division}
-
-                # Ignore inegligible matches
-                txt = result_section.xpath(
-                    "./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text()"
-                ).get()
-                if txt is not None:
-                    txt = normalize_text(txt)
-                    if txt.startswith("record ineligible"):
-                        continue
-
-                # Sport of the match (must)
-                sport = result_section.xpath("./@data-sport").get()
-                if sport is None:
-                    self.logger.error(
-                        "Unexpected page structure: could not identify the sport of the match"
-                    )
-                    continue
-                try:
-                    item["sport"] = normalize_sport(sport)
-                except NormalizeError as e:
-                    self.logger.error(e)
-                    continue
-
-                # Status of the match (must)
-                status = result_section.xpath("./@data-status").get()
-                if status is None:
-                    self.logger.error(
-                        "Unexpected page structure: could not identify the status of the match"
-                    )
-                    continue
-                try:
-                    item["status"] = normalize_status(status)
-                except NormalizeError as e:
-                    self.logger.error(e)
-                    continue
-
-                # Ignore matches with status = cancelled, upcoming, unknown
-                if item["status"] in [
-                    consts.STATUS_CANCELLED,
-                    consts.STATUS_UPCOMING,
-                    consts.STATUS_UNKNOWN,
-                ]:
-                    continue
-
-                # Date of the match (must)
-                date = result_section.xpath(
-                    "./div[@class='result']/div[@class='date']/text()"
-                ).get()
-                if date is None:
-                    self.logger.error(
-                        "Unexpected page structure: could not identify the date of the match"
-                    )
-                    continue
-                try:
-                    item["date"] = normalize_date(date)
-                except NormalizeError as e:
-                    self.logger.error(e)
-                    continue
-
-                # Calc age at the match (optional)
-                if "date_of_birth" in ret:
-                    item["age"] = calc_age(item["date"], ret["date_of_birth"])
-
-                # Opponent section (must)
-                opponent_section = result_section.xpath(
-                    "./div[@class='result']/div[@class='opponent']"
-                )
-                if len(opponent_section) == 0:
-                    self.logger.error(
-                        "Unexpected page structure: could not find opponent section"
-                    )
-                    continue
-                item["opponent"] = {}
-
-                # Name & url of the opponent (must)
-                opponent_url = opponent_section.xpath(
-                    "./div[@class='name']/a/@href"
-                ).get()
-                if opponent_url is None:
-                    continue
-                item["opponent"] = response.urljoin(opponent_url)
-
-                # Record of the fighter (optional)
-                record = opponent_section.xpath(
-                    "./div[@class='record']/span[@title='Fighter Record Before Fight']/text()"
-                ).get()
-                if record is not None:
-                    try:
-                        item["record"] = parse_record(record)
-                    except ParseError as e:
-                        self.logger.error(e)
-
-                # Promotion of the match (optional)
-                promo_url = result_section.xpath(
-                    "./div[@class='details tall']/div[@class='logo']/div[@class='promotionLogo']/a/@href"
-                ).get()
-                if promo_url is not None:
-                    item["promotion"] = response.urljoin(promo_url)
-                if "promotion" not in item:
-                    promo_link_section = result_section.xpath(
-                        "./div[@class='result']/div[@class='summary']/div[@class='notes']/a"
-                    )
-                    if len(promo_link_section) == 1:
-                        title = promo_link_section.xpath("./@title").get()
-                        promo_url = promo_link_section.xpath("./@href").get()
-                        if title is not None:
-                            title = normalize_text(title)
-                            if title == "promotion page" and promo_url is not None:
-                                item["promotion"] = response.urljoin(promo_url)
-
-                # Event of the match (optional)
-                event_url = result_section.xpath(
-                    "./div[@class='result']/div[@class='summary']/div[@class='notes']/a[@title='Event Page']/@href"
-                ).get()
-                if event_url is not None:
-                    item["event"] = response.urljoin(event_url)
-
-                # Details of the result (optional)
-                if item["status"] in [
-                    consts.STATUS_WIN,
-                    consts.STATUS_LOSS,
-                    consts.STATUS_DRAW,
-                    consts.STATUS_NC,
-                ]:
-                    # Summary of the match (must)
-                    match_summary_section = result_section.xpath(
-                        "./div[@class='result']/div[@class='summary']/div[@class='lead']"
-                    )
-                    if len(match_summary_section) == 0:
-                        self.logger.error(
-                            "Unexpected page structure: could not find summary section"
-                        )
-                        continue
-                    match_summary = match_summary_section.xpath("./a/text()").get()
-                    if match_summary is None:
-                        # No link
-                        match_summary = match_summary_section.xpath("./text()").get()
-                    if match_summary is None:
-                        self.logger.error(
-                            "Unexpected page structure: could not find match summary text"
-                        )
-                        continue
-                    try:
-                        summary = parse_match_summary(
-                            item["sport"], item["status"], match_summary
-                        )
-                        for k, v in summary.items():
-                            item[k] = v
-                    except ParseError as e:
-                        self.logger.error(e)
-
-                    # Match url (optional)
-                    match_url = match_summary_section.xpath("./a/@href").get()
-                    if match_url is not None:
-                        item["match"] = response.urljoin(match_url)
-
-                    # More info (optional)
-                    label_sections = result_section.xpath(
-                        "./div[@class='details tall']/div[@class='div']/span[@class='label']"
-                    )
-                    for label_section in label_sections:
-                        label = label_section.xpath("./text()").get()
-                        if label is None:
-                            continue
-                        label = normalize_text(label)
-                        if label == "billing:":
-                            # Billing of the match
-                            billing = label_section.xpath(
-                                "./following-sibling::span[1]/text()"
-                            ).get()
-                            if billing is not None:
-                                try:
-                                    item["billing"] = normalize_billing(billing)
-                                except NormalizeError as e:
-                                    self.logger.error(e)
-                        elif label == "duration:":
-                            # Round format of the match
-                            round_format = label_section.xpath(
-                                "./following-sibling::span[1]/text()"
-                            ).get()
-                            if round_format is not None:
-                                try:
-                                    item["round_format"] = normalize_round_format(
-                                        round_format
-                                    )
-                                except NormalizeError as e:
-                                    self.logger.error(e)
-                        elif label == "referee:":
-                            # Referee of the match
-                            referee = label_section.xpath(
-                                "./following-sibling::span[1]/text()"
-                            ).get()
-                            if referee is not None:
-                                item["referee"] = normalize_text(referee)
-                        elif label == "weight:":
-                            # Weight infomation of the match
-                            weight_summary = label_section.xpath(
-                                "./following-sibling::span[1]/text()"
-                            ).get()
-                            if weight_summary is not None:
-                                try:
-                                    item["weight"] = parse_weight_summary(
-                                        weight_summary
-                                    )
-                                except ParseError as e:
-                                    pattern = normalize_text(e.text)
-                                    if (
-                                        "open" in pattern
-                                        or "catch" in pattern
-                                        or "numeric" in pattern
-                                    ):
-                                        pass
-                                    else:
-                                        self.logger.error(e)
-                        elif label == "odds:":
-                            # Odds of the fighter
-                            odds = label_section.xpath(
-                                "./following-sibling::span[1]/text()"
-                            ).get()
-                            if odds is not None:
-                                try:
-                                    item["odds"] = parse_odds(odds)
-                                except ParseError as e:
-                                    self.logger.error(e)
-                        elif label == "title bout:":
-                            # Title infomation
-                            title_info = label_section.xpath(
-                                "./following-sibling::span[1]/text()"
-                            ).get()
-                            if title_info is not None:
-                                try:
-                                    item["title_info"] = parse_title_info(title_info)
-                                except ParseError as e:
-                                    self.logger.error(e)
-                ret["results"].append(item)
-
-            # Ignore fighters with no match results
-            if len(ret["results"]) == 0:
-                return
+        if head_coach is not None and not is_na(head_coach):
+            ret["head_coach"] = normalize_text(head_coach)
         return ret
 
 
@@ -526,7 +275,22 @@ class ResultsSpider(scrapy.Spider):
         if next_url is not None:
             yield response.follow(next_url, callback=self.parse)
 
-    def parse_fighter(self, response: TextResponse) -> Generator[Request, None, None]:
+    def parse_fighter(self, response: TextResponse) -> dict | None:
+        # Parse profile section (must)
+        profile_section = response.xpath("//div[@class='details details_two_columns']")
+        if len(profile_section) == 0:
+            return
+
+        # Date of birth (optional)
+        date_of_birth = profile_section.xpath(
+            "./ul/li/strong[text()='| Date of Birth:']/following-sibling::span[1]/text()"
+        ).get()
+        if date_of_birth is not None:
+            try:
+                date_of_birth = normalize_date(date_of_birth)
+            except NormalizeError as e:
+                self.logger.error(e)
+
         # Parse results
         for division in [consts.DIVISION_PRO, consts.DIVISION_AM]:
             result_sections = response.xpath(
@@ -535,23 +299,15 @@ class ResultsSpider(scrapy.Spider):
             if len(result_sections) == 0:
                 continue
             for result_section in result_sections:
-                # Stores auxiliary info to pass to parse_result callback
                 auxiliary = {"division": division}
 
                 # Ignore inegligible matches
-                txt = result_section.xpath(
+                text = result_section.xpath(
                     "./div[@class='result']/div[@class='opponent']/div[@class='record nonMma']/text()"
                 ).get()
-                if txt is not None:
-                    txt = normalize_text(txt)
-                    if txt.startswith("record ineligible"):
-                        continue
-
-                # Result url (must)
-                result_url = result_section.xpath(
-                    "./div[@class='result']/div[@class='summary']/div[@class='lead']/a/@href"
-                ).get()
-                if result_url is None:
+                if text is not None and normalize_text(text).startswith(
+                    "record ineligible"
+                ):
                     continue
 
                 # Sport of the match (must)
@@ -564,21 +320,84 @@ class ResultsSpider(scrapy.Spider):
                     self.logger.error(e)
                     continue
 
-                # Ignore matches with status = cancelled, upcoming, unknown
+                # Status of the match (must)
                 status = result_section.xpath("./@data-status").get()
                 if status is None:
                     continue
                 try:
-                    status = normalize_status(status)
+                    auxiliary["status"] = normalize_status(status)
                 except NormalizeError as e:
                     self.logger.error(e)
                     continue
-                if status in [
+
+                # Ignore matches with status = cancelled, upcoming, unknown
+                if auxiliary["status"] in [
                     consts.STATUS_CANCELLED,
                     consts.STATUS_UPCOMING,
                     consts.STATUS_UNKNOWN,
                 ]:
                     continue
+
+                # Date of the match (must)
+                date = result_section.xpath(
+                    "./div[@class='result']/div[@class='date']/text()"
+                ).get()
+                if date is None:
+                    continue
+                try:
+                    auxiliary["date"] = normalize_date(date)
+                except NormalizeError as e:
+                    self.logger.error(e)
+                    continue
+
+                # Calc age at the match (optional)
+                if "date_of_birth" in auxiliary:
+                    auxiliary["age"] = calc_age(
+                        auxiliary["date"], auxiliary["date_of_birth"]
+                    )
+
+                # Opponent section (must)
+                opponent_section = result_section.xpath(
+                    "./div[@class='result']/div[@class='opponent']"
+                )
+                if len(opponent_section) == 0:
+                    continue
+                auxiliary["opponent"] = {}
+
+                # URL of the opponent (must)
+                opponent_url = opponent_section.xpath(
+                    "./div[@class='name']/a/@href"
+                ).get()
+                if opponent_url is None:
+                    continue
+                auxiliary["opponent"] = response.urljoin(opponent_url)
+
+                # Record of the fighter (optional)
+                record = opponent_section.xpath(
+                    "./div[@class='record']/span[@title='Fighter Record Before Fight']/text()"
+                ).get()
+                if record is not None:
+                    try:
+                        parsed = parse_record(record)
+                        if parsed is not None:
+                            auxiliary["record_before"] = parsed
+                            auxiliary["record_after"] = parsed
+                            status = auxiliary["status"]
+                            if status == consts.STATUS_WIN:
+                                auxiliary["record_after"]["w"] += 1
+                            elif status == consts.STATUS_LOSS:
+                                auxiliary["record_after"]["l"] += 1
+                            elif status == consts.STATUS_DRAW:
+                                auxiliary["record_after"]["d"] += 1
+                    except ParseError as e:
+                        self.logger.error(e)
+
+                # Match url (optional)
+                match_url = result_section.xpath(
+                    "./div[@class='result']/div[@class='summary']/div[@class='lead']/a/@href"
+                ).get()
+                if match_url is not None:
+                    auxiliary["match"] = response.urljoin(match_url)
 
                 # More info (optional)
                 label_sections = result_section.xpath(
@@ -589,7 +408,17 @@ class ResultsSpider(scrapy.Spider):
                     if label is None:
                         continue
                     label = normalize_text(label)
-                    if label == "duration:":
+                    if label == "billing:":
+                        # Billing of the match
+                        billing = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if billing is not None:
+                            try:
+                                auxiliary["billing"] = normalize_billing(billing)
+                            except NormalizeError as e:
+                                self.logger.error(e)
+                    elif label == "duration:":
                         # Round format of the match
                         round_format = label_section.xpath(
                             "./following-sibling::span[1]/text()"
@@ -601,111 +430,59 @@ class ResultsSpider(scrapy.Spider):
                                 )
                             except NormalizeError as e:
                                 self.logger.error(e)
-                req = response.follow(url=result_url, callback=self.parse_result)
-                req.cb_kwargs["auxiliary"] = auxiliary
-                yield req
+                    elif label == "referee:":
+                        # Referee of the match
+                        referee = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if referee is not None:
+                            auxiliary["referee"] = normalize_text(referee)
+                    elif label == "weight:":
+                        # Weight infomation of the match
+                        weight_summary = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if weight_summary is not None:
+                            try:
+                                auxiliary["weight"] = parse_weight_summary(
+                                    weight_summary
+                                )
+                            except ParseError as e:
+                                self.logger.error(e)
+                    elif label == "odds:":
+                        # Odds of the fighter
+                        odds = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if odds is not None:
+                            try:
+                                auxiliary["odds"] = parse_odds(odds)
+                            except ParseError as e:
+                                self.logger.error(e)
+                    elif label == "title bout:":
+                        # Title infomation
+                        title_info = label_section.xpath(
+                            "./following-sibling::span[1]/text()"
+                        ).get()
+                        if title_info is not None:
+                            try:
+                                auxiliary["title_info"] = parse_title_info(title_info)
+                            except ParseError as e:
+                                self.logger.error(e)
 
-    def parse_result(self, response: TextResponse, auxiliary: dict) -> dict:
-        ret = {"url": response.url}
-        for key in auxiliary:
-            ret[key] = auxiliary[key]
-        ret["fighter_a"] = {}
-        ret["fighter_b"] = {}
-
-        # Fighter URLs (must)
-        for which in ["a", "b"]:
-            fighter_url = response.xpath(
-                f"//span[@class='fName {'left' if which == 'a' else 'right'}']/a/@href"
-            ).get()
-            if fighter_url is not None:
-                ret[f"fighter_{which}"]["url"] = response.urljoin(fighter_url)
-
-        # TOT (tale of tape) sections
-        tot_sections = response.xpath(
-            "//div[@class='boutComparisonTable']/table[@class='fighterStats spaced']/tr"
-        )
-        for which in ["a", "b"]:
-            for tot_section in tot_sections:
-                category = tot_section.xpath("./td[@class='category']/text()").get()
-                if category is None:
-                    continue
-                category = normalize_text(category)
-                category_data = tot_section.xpath(
-                    f"./td[{'1' if which == 'a' else 'last()'}]/text()"
+                # Event of the match (optional)
+                event_url = result_section.xpath(
+                    "./div[@class='result']/div[@class='summary']/div[@class='notes']/a[@title='Event Page']/@href"
                 ).get()
-                if category_data is None:
-                    continue
-                if category == "pro record at fight":
-                    try:
-                        record = parse_record(category_data)
-                        if record is not None:
-                            ret[f"fighter_{which}"]["record_before_match"] = record
-                    except ParseError as e:
-                        self.logger.error(e)
-                elif category == "record after fight":
-                    try:
-                        record = parse_record(category_data)
-                        if record is not None:
-                            ret[f"fighter_{which}"]["record_after_match"] = record
-                    except ParseError as e:
-                        self.logger.error(e)
-                elif category == "age at fight":
-                    try:
-                        age = parse_age(category_data)
-                        if age is not None:
-                            ret[f"fighter_{which}"]["age"] = age
-                    except ParseError as e:
-                        self.logger.error(e)
-                elif category == "weigh-in result":
-                    try:
-                        weigh_in = parse_weight(category_data)
-                        if weigh_in is not None:
-                            ret[f"fighter_{which}"]["weigh_in"] = weigh_in
-                    except ParseError as e:
-                        self.logger.error(e)
-                elif category == "betting odds":
-                    try:
-                        odds = parse_odds(category_data)
-                        ret[f"fighter_{which}"]["odds"] = odds
-                    except ParseError as e:
-                        self.logger.error(e)
+                if event_url is None:
+                    yield auxiliary
+                else:
+                    req = response.follow(url=event_url, callback=self.parse_event)
+                    req.cb_kwargs["auxiliary"] = auxiliary
+                    yield req
 
-        # Bout infomation
-        info_sections = response.xpath(
-            "//div[@class='details details_with_poster clearfix']/div[@class='right']/ul[@class='clearfix']/li"
-        )[1:]
-        for info_section in info_sections:
-            label = info_section.xpath("./strong/text()").get()
-            if label is None:
-                continue
-            label = normalize_text(label)
-            if label == "event:":
-                event = info_section.xpath("./span/a/@href").get()
-                if event is not None:
-                    ret["event"] = response.urljoin(event)
-            elif label == "date:":
-                date = info_section.xpath("./span/text()").get()
-                if date is not None:
-                    try:
-                        ret["date"] = normalize_date(date)
-                    except NormalizeError as e:
-                        self.logger.error(e)
-            elif label == "enclosure:":
-                enclosure = info_section.xpath("./span/text()").get()
-                if enclosure is not None:
-                    ret["enclosure"] = normalize_text(enclosure)
-            elif label == "referee:":
-                referee = info_section.xpath("./span/text()").get()
-                if referee is not None:
-                    ret["referee"] = normalize_text(referee)
-            elif label == "bout billing:":
-                billing = info_section.xpath("./span/text()").get()
-                if billing is not None:
-                    try:
-                        ret["billing"] = parse_billing(billing)
-                    except ParseError as e:
-                        self.logger.error(e)
-        return ret
+    def parse_event(self, response: TextResponse, auxiliary: dict):
+        return auxiliary
 
 
 class PromotionsSpider(scrapy.Spider):
