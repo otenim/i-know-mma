@@ -776,6 +776,17 @@ def correct_match_url(match_url: str) -> str:
         == "807702-gemmaf-deutsche-meisterschaften-2023-emir-can-the-turkish-bull-al-vs-devid-bondarenko"
     ):
         match_id = "825639-german-amateur-mma-chamiponship-2023-emir-can-the-turkish-bull-al-vs-devid-bondarenko"
+    elif match_id == "706957-ffc-5-matej-batinic-vs-attila-petrovszki":
+        match_id = (
+            "818510-final-fight-championship-5-matej-batinic-vs-attila-petrovszki"
+        )
+    elif (
+        match_id
+        == "800525-superior-challenge-26-ederson-cristian-lion-macedo-vs-king-karl-albrektsson"
+    ):
+        match_id = "800525-superior-challenge-26-king-karl-albrektsson-vs-ederson-cristian-lion-macedo"
+    elif match_id == "790690-combate-global-killer-kade-kottenbrook-vs-michel-martinez":
+        match_id = "790690-combate-global-michel-martinez-vs-killer-kade-kottenbrook"
     else:
         return match_url
     body = match_url.split("/")[:-1]
@@ -787,6 +798,8 @@ def correct_event_url(event_url: str) -> str:
     event_id = event_url.split("/")[-1]
     if event_id == "106352-gemmaf-deutsche-meisterschaften-2023-day-1":
         event_id = "108242-german-amateur-mma-chamiponship-2023-seniors"
+    elif event_id == "95012-ffc-5":
+        event_id = "19563-final-fight-championship-5-rodriguez-vs-simonic"
     else:
         return event_url
     body = event_url.split("/")[:-1]
