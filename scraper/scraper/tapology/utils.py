@@ -511,25 +511,22 @@ def parse_method(method: str) -> dict:
     cat = normed_split[0]
     by = None if n == 1 else ",".join(normed_split[1:])
     if cat == "ko/tko":
-        type_ = consts.METHOD_TYPE_KO_TKO
         if by is None:
-            return {"type": type_}
-        return {"type": type_, "by": by}
+            return {"type": consts.METHOD_TYPE_KO_TKO}
+        return {"type": consts.METHOD_TYPE_KO_TKO, "by": by}
     elif cat == "submission":
-        type_ = consts.METHOD_TYPE_DECISION
         if by is None:
-            return {"type": type_}
-        return {"type": type, "by": by}
+            return {"type": consts.METHOD_TYPE_SUBMISSION}
+        return {"type": consts.METHOD_TYPE_SUBMISSION, "by": by}
     elif cat == "decision":
-        type_ = consts.METHOD_TYPE_DECISION
         if by is None:
-            return {"type": type_}
+            return {"type": consts.METHOD_TYPE_DECISION}
         if by in ["unanimous", "unanimous after extra round"]:
-            return {"type": type_, "by": "unanimous"}
+            return {"type": consts.METHOD_TYPE_DECISION, "by": "unanimous"}
         if by in ["majority", "majority *"]:
-            return {"type": type_, "by": "majority"}
+            return {"type": consts.METHOD_TYPE_DECISION, "by": "majority"}
         if by in ["split", "split decision", "split,extra round"]:
-            return {"type": type_, "by": "split"}
+            return {"type": consts.METHOD_TYPE_DECISION, "by": "split"}
         if (
             by
             in [
@@ -551,11 +548,11 @@ def parse_method(method: str) -> dict:
             or re.match(r".+ \(technical\)", by)
             or "illegal" in by
         ):
-            return {"type": type_, "by": "technical"}
+            return {"type": consts.METHOD_TYPE_DECISION, "by": "technical"}
         if by in ["points"] or re.match(r"(points )?\d+(\-|\:)\d+", by):
-            return {"type": type_, "by": "points"}
+            return {"type": consts.METHOD_TYPE_DECISION, "by": "points"}
         if by in ["golden score"]:
-            return {"type": type_, "by": "golden"}
+            return {"type": consts.METHOD_TYPE_DECISION, "by": "golden"}
         if by in [
             "fastest escape time",
             "faster escape",
@@ -563,50 +560,44 @@ def parse_method(method: str) -> dict:
             "escape time",
             "escape time in overtime",
         ]:
-            return {"type": type_, "by": "escape"}
+            return {"type": consts.METHOD_TYPE_DECISION, "by": "escape"}
         if by in ["technical fall", "tech fall"]:
-            return {"type": type_, "by": "technical_fall"}
+            return {"type": consts.METHOD_TYPE_DECISION, "by": "technical_fall"}
         if by in ["extension round", "extra round"]:
-            return {"type": type_, "by": "extra"}
-        return {"type": type_}
+            return {"type": consts.METHOD_TYPE_DECISION, "by": "extra"}
+        return {"type": consts.METHOD_TYPE_DECISION}
     elif cat == "ends in a draw":
-        type_ = consts.METHOD_TYPE_DRAW
         if by is None or by == "draw":
-            return {"type": type_}
+            return {"type": consts.METHOD_TYPE_DRAW}
         if by in [
             "unanimous",
             "unanimous draw",
             "unanimous after extra round",
             "draw (unanimous)",
         ]:
-            return {"type": type_, "by": "unanimous"}
+            return {"type": consts.METHOD_TYPE_DRAW, "by": "unanimous"}
         if by in ["majority", "majority draw"]:
-            return {"type": type_, "by": "majority"}
+            return {"type": consts.METHOD_TYPE_DRAW, "by": "majority"}
         if by in ["split", "split draw"]:
-            return {"type": type_, "by": "split"}
+            return {"type": consts.METHOD_TYPE_DRAW, "by": "split"}
         if by in ["points"]:
-            return {"type": type_, "by": "points"}
+            return {"type": consts.METHOD_TYPE_DRAW, "by": "points"}
         if by in ["time limit"]:
-            return {"type": type_, "by": "timelimit"}
+            return {"type": consts.METHOD_TYPE_DRAW, "by": "timelimit"}
         if by in ["no decision", "no official scoring"]:
-            return {"type": type_, "by": "no_decision"}
+            return {"type": consts.METHOD_TYPE_DRAW, "by": "no_decision"}
         if "injur" in by or "accident" in by or "illegal" in by or "tech" in by:
-            return {"type": type_, "by": "technical"}
+            return {"type": consts.METHOD_TYPE_DRAW, "by": "technical"}
     elif cat in ["ends in a no contest", "ends in a no contest *"]:
-        type_ = consts.METHOD_TYPE_NC
-        return {"type": type_}
+        return {"type": consts.METHOD_TYPE_NC}
     elif cat == "disqualificaton":
-        type_ = consts.METHOD_TYPE_DQ
-        return {"type": type_}
+        return {"type": consts.METHOD_TYPE_DQ}
     elif cat in ["overturned to no contest", "result overturned"]:
-        type_ = consts.METHOD_TYPE_OVERTURNED
-        return {"type": type_}
+        return {"type": consts.METHOD_TYPE_OVERTURNED}
     elif cat == "n/a":
-        type_ = consts.METHOD_TYPE_OTHERS
-        return {"type": type_}
+        return {"type": consts.METHOD_TYPE_OTHERS}
     elif cat == "result unknown":
-        type_ = consts.METHOD_TYPE_UNKNOWN
-        return {"type": type_}
+        return {"type": consts.METHOD_TYPE_UNKNOWN}
     raise ParseError("method", normed)
 
 
