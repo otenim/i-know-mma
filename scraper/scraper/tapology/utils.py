@@ -756,6 +756,44 @@ def to_kg(value: float, unit: str = "lb") -> float:
     return value
 
 
+def correct_match_url(match_url: str) -> str:
+    match_id = match_url.split("/")[-1]
+    if match_id == "759886-nfc-14-david-balevski-vs-milan-markovic":
+        match_id = "759886-nfc-14-david-balevski-vs-milan-nemanja-markovic"
+    elif match_id == "811882-fantom-bull-fight-2-dominik-janikowski-vs-kamil-smetoch":
+        match_id = "811882-fantom-bull-fight-2-kamil-smetoch-vs-dominik-janikowski"
+    elif (
+        match_id
+        == "195851-acamm-fight-nights-juan-david-bohorquez-vs-gabriel-tanaka-quintero"
+    ):
+        match_id = "195851-acamm-juan-david-bohorquez-vs-gabriel-tanaka-quintero"
+    elif match_id == "189527-fmp-fight-night-paulino-siller-vs-neri-garcia":
+        match_id = (
+            "189527-fmp-fight-night-paulino-el-cuate-siller-vs-neri-antonio-garcia"
+        )
+    elif (
+        match_id
+        == "807702-gemmaf-deutsche-meisterschaften-2023-emir-can-the-turkish-bull-al-vs-devid-bondarenko"
+    ):
+        match_id = "825639-german-amateur-mma-chamiponship-2023-emir-can-the-turkish-bull-al-vs-devid-bondarenko"
+    else:
+        return match_url
+    body = match_url.split("/")[:-1]
+    body.append(match_id)
+    return "/".join(body)
+
+
+def correct_event_url(event_url: str) -> str:
+    event_id = event_url.split("/")[-1]
+    if event_id == "106352-gemmaf-deutsche-meisterschaften-2023-day-1":
+        event_id = "108242-german-amateur-mma-chamiponship-2023-seniors"
+    else:
+        return event_url
+    body = event_url.split("/")[:-1]
+    body.append(event_id)
+    return "/".join(body)
+
+
 def infer_method(sport: str, status: str, note: str) -> str:
     normed = normalize_text(note)
     if sport not in [

@@ -22,6 +22,8 @@ from .utils import (
     parse_end_time,
     parse_title_info,
     parse_method,
+    correct_match_url,
+    correct_event_url,
     is_na,
     calc_age,
 )
@@ -425,46 +427,18 @@ class FightersSpider(scrapy.Spider):
                     "./div[@class='result']/div[@class='summary']/div[@class='lead']/a/@href"
                 ).get()
                 if match_url is not None:
-                    match_url = response.urljoin(match_url)
-                    if (
-                        match_url
-                        == "https://www.tapology.com/fightcenter/bouts/759886-nfc-14-david-balevski-vs-milan-markovic"
-                    ):
-                        match_url = "https://www.tapology.com/fightcenter/bouts/759886-nfc-14-david-balevski-vs-milan-nemanja-markovic"
-                    elif (
-                        match_url
-                        == "https://www.tapology.com/fightcenter/bouts/811882-fantom-bull-fight-2-dominik-janikowski-vs-kamil-smetoch"
-                    ):
-                        match_url = "https://www.tapology.com/fightcenter/bouts/811882-fantom-bull-fight-2-kamil-smetoch-vs-dominik-janikowski"
-                    elif (
-                        match_url
-                        == "https://www.tapology.com/fightcenter/bouts/195851-acamm-fight-nights-juan-david-bohorquez-vs-gabriel-tanaka-quintero"
-                    ):
-                        match_url = "https://www.tapology.com/fightcenter/bouts/195851-acamm-juan-david-bohorquez-vs-gabriel-tanaka-quintero"
-                    elif (
-                        match_url
-                        == "https://www.tapology.com/fightcenter/bouts/189527-fmp-fight-night-paulino-siller-vs-neri-garcia"
-                    ):
-                        match_url = "https://www.tapology.com/fightcenter/bouts/189527-fmp-fight-night-paulino-el-cuate-siller-vs-neri-antonio-garcia"
-                    elif (
-                        match_url
-                        == "https://www.tapology.com/fightcenter/bouts/807702-gemmaf-deutsche-meisterschaften-2023-emir-can-the-turkish-bull-al-vs-devid-bondarenko"
-                    ):
-                        match_url = "https://www.tapology.com/fightcenter/bouts/825639-german-amateur-mma-chamiponship-2023-emir-can-the-turkish-bull-al-vs-devid-bondarenko"
+                    match_url = correct_match_url(response.urljoin(match_url))
                     auxiliary["match"] = match_url
+
                 # Event ID (optional)
                 event_url = result_section.xpath(
                     "./div[@class='result']/div[@class='summary']/div[@class='notes']/a[@title='Event Page']/@href"
                 ).get()
                 if event_url is not None:
-                    event_url = response.urljoin(event_url)
-                    if (
-                        event_url
-                        == "https://www.tapology.com/fightcenter/events/106352-gemmaf-deutsche-meisterschaften-2023-day-1"
-                    ):
-                        event_url = "https://www.tapology.com/fightcenter/events/108242-german-amateur-mma-chamiponship-2023-seniors"
+                    event_url = correct_event_url(response.urljoin(event_url))
                     auxiliary["event"] = event_url
 
+                # Return
                 if match_url is None or event_url is None:
                     yield auxiliary
                 else:
