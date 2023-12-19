@@ -370,6 +370,58 @@ def parse_odds(odds: str) -> float:
     raise ParseError("odds", normed)
 
 
+def parse_end_time(end_time: str) -> dict:
+    normed = normalize_text(end_time)
+    # 1:44 round 1 of 3
+    # 0:56 round 3 of 3, 10:56 total
+    # 3:09 round 2, 18:09 total
+    # 2:20 round 3
+    # round 3 of 5
+    # round 2 of 3, 3:00 total
+    matched = re.match(
+        r"(?:(\d+:\d+) )?round (\d+)(?: of \d+)?(?:, (\d+:\d+) total)?", normed
+    )
+    if matched is not None:
+        round_time = matched.group(1)
+        round = int(matched.group(2))
+        elapsed_time = matched.group(3)
+        if round_time is not None and elapsed_time is not None:
+            return {"round": round, "time": round_time, "elapsed": elapsed_time}
+        elif round_time is not None and elapsed_time is None:
+            if round == 1:
+                return {"round": round, "time": round_time, "elapsed": round_time}
+            return {"round": round, "time": round_time}
+        elif round_time is None and elapsed_time is None:
+            return {"round": round}
+        elif round_time is None and elapsed_time is not None:
+            return {"round": round, "elapsed": elapsed_time}
+    # 5 rounds, 25:00 total
+    # 1 round, 10:00 total
+    # 1 round
+    # 2 rounds
+    matched = re.match(r"(\d+) rounds?(?:, (\d+:\d+) total)?", normed)
+    if matched is not None:
+        round = int(matched.group(1))
+        elapsed_time = matched.group(2)
+        if elapsed_time is not None:
+            return {"round": round, "elapsed": elapsed_time}
+        return {"round": round}
+    # 1:31 round 8/10, 22:31 total
+    matched = re.match(r"(\d+:\d+) round (\d+)/\d+, (\d+:\d+) total", normed)
+    if matched is not None:
+        round_time = matched.group(1)
+        round = int(matched.group(2))
+        elapsed_time = matched.group(3)
+        return {"round": round, "time": round_time, "elapsed": elapsed_time}
+    # round 1
+    # round 3
+    matched = re.match(r"round (\d+)", normed)
+    if matched is not None:
+        round = int(matched.group(1))
+        return {"round": round}
+    raise ParseError("end time", normed)
+
+
 def parse_weight_summary(weight_summary: str) -> dict[str, float]:
     normed = normalize_text(weight_summary)
     normed_split = list(map(lambda x: x.strip(), normed.split("·")))

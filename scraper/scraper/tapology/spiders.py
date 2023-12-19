@@ -19,6 +19,7 @@ from .utils import (
     parse_reach,
     parse_weight_summary,
     parse_odds,
+    parse_end_time,
     parse_title_info,
     is_na,
     calc_age,
@@ -43,17 +44,24 @@ class FightersSpider(scrapy.Spider):
 
     def __init__(
         self,
+        scope: str = "profile",
         *args,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
+        if scope not in ["profile", "result"]:
+            raise ValueError(f"Unsupported scope: {scope}")
+        self.scope = scope
 
     def parse(self, response: TextResponse) -> Generator[Request, None, None]:
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
         for fighter in fighters:
             url = fighter.xpath("./td[1]/a/@href").get()
             if url is not None:
-                yield response.follow(url, callback=self.parse_fighter)
+                if self.scope == "profile":
+                    yield response.follow(url, callback=self.parse_profile)
+                elif self.scope == "result":
+                    yield response.follow(url, callback=self.parse_result)
 
         # Move to the next page
         next_url = response.xpath(
@@ -62,7 +70,7 @@ class FightersSpider(scrapy.Spider):
         if next_url is not None:
             yield response.follow(next_url, callback=self.parse)
 
-    def parse_fighter(self, response: TextResponse) -> dict | None:
+    def parse_profile(self, response: TextResponse) -> dict | None:
         ret = {}
 
         # Fighter ID (must)
@@ -105,7 +113,7 @@ class FightersSpider(scrapy.Spider):
         record = profile_section.xpath(
             "./ul/li/strong[text()='Pro MMA Record:']/following-sibling::span[1]/text()"
         ).get()
-        if record is not None:
+        if record is not None and not is_na(record):
             try:
                 ret["record"] = parse_record(record)
             except ParseError as e:
@@ -125,7 +133,7 @@ class FightersSpider(scrapy.Spider):
         weight_class = profile_section.xpath(
             "./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text()"
         ).get()
-        if weight_class is not None:
+        if weight_class is not None and not is_na(weight_class):
             try:
                 normed = normalize_weight_class(weight_class)
                 if normed is not None:
@@ -147,7 +155,7 @@ class FightersSpider(scrapy.Spider):
         earnings = profile_section.xpath(
             "./ul/li/strong[text()='Career Disclosed Earnings:']/following-sibling::span[1]/text()"
         ).get()
-        if earnings is not None:
+        if earnings is not None and not is_na(earnings):
             try:
                 ret["earnings"] = parse_earnings(earnings)
             except ParseError as e:
@@ -222,45 +230,9 @@ class FightersSpider(scrapy.Spider):
             ret["head_coach"] = normalize_text(head_coach)
         return ret
 
-
-class ResultsSpider(scrapy.Spider):
-    name = "results"
-    start_urls = [
-        "https://www.tapology.com/search/mma-fighters-by-weight-class/Atomweight-105-pounds",
-        "https://www.tapology.com/search/mma-fighters-by-weight-class/Strawweight-115-pounds",
-        "https://www.tapology.com/search/mma-fighters-by-weight-class/Flyweight-125-pounds",
-        "https://www.tapology.com/search/mma-fighters-by-weight-class/Bantamweight-135-pounds",
-        "https://www.tapology.com/search/mma-fighters-by-weight-class/Featherweight-145-pounds",
-        "https://www.tapology.com/search/mma-fighters-by-weight-class/Lightweight-155-pounds",
-        "https://www.tapology.com/search/mma-fighters-by-weight-class/Welterweight-170-pounds",
-        "https://www.tapology.com/search/mma-fighters-by-weight-class/Middleweight-185-pounds",
-        "https://www.tapology.com/search/mma-fighters-by-weight-class/Light_Heavyweight-205-pounds",
-        "https://www.tapology.com/search/mma-fighters-by-weight-class/Heavyweight-265-pounds",
-        "https://www.tapology.com/search/mma-fighters-by-weight-class/Super_Heavyweight-over-265-pounds",
-    ]
-
-    def __init__(
-        self,
-        *args,
-        **kwargs,
-    ) -> None:
-        super().__init__(*args, **kwargs)
-
-    def parse(self, response: TextResponse) -> Generator[Request, None, None]:
-        fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
-        for fighter in fighters:
-            url = fighter.xpath("./td[1]/a/@href").get()
-            if url is not None:
-                yield response.follow(url, callback=self.parse_fighter)
-
-        # Move to the next page
-        next_url = response.xpath(
-            "//span[@class='moreLink']/nav[@class='pagination']/span[@class='next']/a/@href"
-        ).get()
-        if next_url is not None:
-            yield response.follow(next_url, callback=self.parse)
-
-    def parse_fighter(self, response: TextResponse) -> dict | None:
+    def parse_result(
+        self, response: TextResponse
+    ) -> Generator[dict | Request, None, None] | None:
         # Parse profile section (must)
         profile_section = response.xpath("//div[@class='details details_two_columns']")
         if len(profile_section) == 0:
@@ -284,7 +256,7 @@ class ResultsSpider(scrapy.Spider):
             if len(result_sections) == 0:
                 continue
             for result_section in result_sections:
-                auxiliary = {"division": division}
+                auxiliary = {"fighter": response.url, "division": division}
 
                 # Ignore inegligible matches
                 text = result_section.xpath(
@@ -336,10 +308,8 @@ class ResultsSpider(scrapy.Spider):
                     continue
 
                 # Calc age at the match (optional)
-                if "date_of_birth" in auxiliary:
-                    auxiliary["age"] = calc_age(
-                        auxiliary["date"], auxiliary["date_of_birth"]
-                    )
+                if date_of_birth is not None and not is_na(date_of_birth):
+                    auxiliary["age"] = calc_age(auxiliary["date"], date_of_birth)
 
                 # Opponent section (must)
                 opponent_section = result_section.xpath(
@@ -349,7 +319,7 @@ class ResultsSpider(scrapy.Spider):
                     continue
                 auxiliary["opponent"] = {}
 
-                # URL of the opponent (must)
+                # ID of the opponent (must)
                 opponent_url = opponent_section.xpath(
                     "./div[@class='name']/a/@href"
                 ).get()
@@ -377,13 +347,6 @@ class ResultsSpider(scrapy.Spider):
                         elif status == consts.STATUS_DRAW:
                             auxiliary["record_after"]["d"] += 1
 
-                # Match url (optional)
-                match_url = result_section.xpath(
-                    "./div[@class='result']/div[@class='summary']/div[@class='lead']/a/@href"
-                ).get()
-                if match_url is not None:
-                    auxiliary["match"] = response.urljoin(match_url)
-
                 # More info (optional)
                 label_sections = result_section.xpath(
                     "./div[@class='details tall']/div[@class='div']/span[@class='label']"
@@ -398,7 +361,7 @@ class ResultsSpider(scrapy.Spider):
                         billing = label_section.xpath(
                             "./following-sibling::span[1]/text()"
                         ).get()
-                        if billing is not None:
+                        if billing is not None and not is_na(billing):
                             try:
                                 auxiliary["billing"] = normalize_billing(billing)
                             except NormalizeError as e:
@@ -408,7 +371,7 @@ class ResultsSpider(scrapy.Spider):
                         round_format = label_section.xpath(
                             "./following-sibling::span[1]/text()"
                         ).get()
-                        if round_format is not None:
+                        if round_format is not None and not is_na(round_format):
                             try:
                                 auxiliary["round_format"] = normalize_round_format(
                                     round_format
@@ -420,20 +383,21 @@ class ResultsSpider(scrapy.Spider):
                         referee = label_section.xpath(
                             "./following-sibling::span[1]/text()"
                         ).get()
-                        if referee is not None:
+                        if referee is not None and not is_na(referee):
                             auxiliary["referee"] = normalize_text(referee)
                     elif label == "weight:":
                         # Weight infomation of the match
                         weight_summary = label_section.xpath(
                             "./following-sibling::span[1]/text()"
                         ).get()
-                        if weight_summary is not None:
+                        if weight_summary is not None and not is_na(weight_summary):
                             try:
                                 auxiliary["weight"] = parse_weight_summary(
                                     weight_summary
                                 )
                             except ParseError as e:
-                                self.logger.error(e)
+                                if e.text not in ["*numeric weight*"]:
+                                    self.logger.error(e)
                     elif label == "odds:":
                         # Odds of the fighter
                         odds = label_section.xpath(
@@ -455,19 +419,61 @@ class ResultsSpider(scrapy.Spider):
                             except ParseError as e:
                                 self.logger.error(e)
 
-                # Event of the match (optional)
+                # Match ID (optional)
+                match_url = result_section.xpath(
+                    "./div[@class='result']/div[@class='summary']/div[@class='lead']/a/@href"
+                ).get()
+                if match_url is not None:
+                    auxiliary["match"] = response.urljoin(match_url)
+
+                # Event ID (optional)
                 event_url = result_section.xpath(
                     "./div[@class='result']/div[@class='summary']/div[@class='notes']/a[@title='Event Page']/@href"
                 ).get()
-                if event_url is None:
+                if event_url is not None:
+                    auxiliary["event"] = response.urljoin(event_url)
+
+                if match_url is None or event_url is None:
                     yield auxiliary
                 else:
                     req = response.follow(url=event_url, callback=self.parse_event)
                     req.cb_kwargs["auxiliary"] = auxiliary
                     yield req
 
-    def parse_event(self, response: TextResponse, auxiliary: dict):
-        return auxiliary
+    def parse_event(self, response: TextResponse, auxiliary: dict) -> dict:
+        ret = {}
+        for key in auxiliary:
+            ret[key] = auxiliary[key]
+
+        card_sections = response.xpath(
+            "//ul[@class='fightCard']/li[@class='fightCard']/div[@class='fightCardBout']"
+        )
+        if len(card_sections) == 0:
+            self.logger.error(f"No matchups were found on event {ret['event']}")
+            return ret
+        hit = False
+        for card_section in card_sections:
+            match_url = card_section.xpath(
+                "./div[@class='fightCardMatchup' or @class='fightCardMatchup sport']/table/tr/td/span[@class='billing']/a/@href"
+            ).get()
+            if match_url is not None and ret["match"] == response.urljoin(match_url):
+                hit = True
+                end_time = card_section.xpath(
+                    "./div[@class='fightCardResultHolder']/div[@class='fightCardResult']/span[@class='time']/text()"
+                ).get()
+                if end_time is not None and not is_na(end_time):
+                    try:
+                        ret["end_time"] = parse_end_time(end_time)
+                    except ParseError as e:
+                        if e.text not in ["rounds"]:
+                            self.logger.error(e)
+            if hit:
+                break
+        if not hit:
+            self.logger.error(
+                f"Could not find match {ret['match']} on event {ret['event']}"
+            )
+        return ret
 
 
 class PromotionsSpider(scrapy.Spider):
@@ -490,12 +496,12 @@ class PromotionsSpider(scrapy.Spider):
                 self.logger.error("name section is missing")
                 continue
 
-            # URL (must)
+            # ID (must)
             url = name_section.xpath("./span[1]/a/@href").get()
             if url is None:
                 self.logger.error("url is missing")
                 continue
-            ret["url"] = response.urljoin(url)
+            ret["id"] = response.urljoin(url)
 
             # Name of promotion (must)
             name = name_section.xpath("./span[1]/a/text()").get()
@@ -540,7 +546,7 @@ class FemaleSpider(scrapy.Spider):
             url = fighter.xpath("./td[1]/a/@href").get()
             name = fighter.xpath("./td[1]/a/text()").get()
             if url is not None and name is not None:
-                yield {"url": response.urljoin(url), "name": normalize_text(name)}
+                yield {"id": response.urljoin(url), "name": normalize_text(name)}
         next_url = response.xpath(
             "//span[@class='moreLink']/nav[@class='pagination']/span[@class='next']/a/@href"
         ).get()
