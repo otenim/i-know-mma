@@ -504,6 +504,112 @@ def parse_earnings(earnings: str) -> int:
     raise ParseError("earnings", normed)
 
 
+def parse_method(method: str) -> dict:
+    normed = normalize_text(method)
+    normed_split = list(map(lambda x: x.strip(), normed.split(",")))
+    n = len(normed_split)
+    cat = normed_split[0]
+    by = None if n == 1 else ",".join(normed_split[1:])
+    if cat == "ko/tko":
+        type_ = consts.METHOD_TYPE_KO_TKO
+        if by is None:
+            return {"type": type_}
+        return {"type": type_, "by": by}
+    elif cat == "submission":
+        type_ = consts.METHOD_TYPE_DECISION
+        if by is None:
+            return {"type": type_}
+        return {"type": type, "by": by}
+    elif cat == "decision":
+        type_ = consts.METHOD_TYPE_DECISION
+        if by is None:
+            return {"type": type_}
+        if by in ["unanimous", "unanimous after extra round"]:
+            return {"type": type_, "by": "unanimous"}
+        if by in ["majority", "majority *"]:
+            return {"type": type_, "by": "majority"}
+        if by in ["split", "split decision", "split,extra round"]:
+            return {"type": type_, "by": "split"}
+        if (
+            by
+            in [
+                "referee",
+                "referee stoppage",
+                "referee decision",
+                "doctor stoppage",
+                "cut",
+                "injury",
+                "medical detention",
+                "technical- unanimous",
+                "techical",
+            ]
+            or re.match(
+                r"technical( split| majority| unanimous)?( decision)?( \(.*\)|\(.*\))?$",
+                by,
+            )
+            or re.match(r".+,technical", by)
+            or re.match(r".+ \(technical\)", by)
+            or "illegal" in by
+        ):
+            return {"type": type_, "by": "technical"}
+        if by in ["points"] or re.match(r"(points )?\d+(\-|\:)\d+", by):
+            return {"type": type_, "by": "points"}
+        if by in ["golden score"]:
+            return {"type": type_, "by": "golden"}
+        if by in [
+            "fastest escape time",
+            "faster escape",
+            "fastest escape time in overtime",
+            "escape time",
+            "escape time in overtime",
+        ]:
+            return {"type": type_, "by": "escape"}
+        if by in ["technical fall", "tech fall"]:
+            return {"type": type_, "by": "technical_fall"}
+        if by in ["extension round", "extra round"]:
+            return {"type": type_, "by": "extra"}
+        return {"type": type_}
+    elif cat == "ends in a draw":
+        type_ = consts.METHOD_TYPE_DRAW
+        if by is None or by == "draw":
+            return {"type": type_}
+        if by in [
+            "unanimous",
+            "unanimous draw",
+            "unanimous after extra round",
+            "draw (unanimous)",
+        ]:
+            return {"type": type_, "by": "unanimous"}
+        if by in ["majority", "majority draw"]:
+            return {"type": type_, "by": "majority"}
+        if by in ["split", "split draw"]:
+            return {"type": type_, "by": "split"}
+        if by in ["points"]:
+            return {"type": type_, "by": "points"}
+        if by in ["time limit"]:
+            return {"type": type_, "by": "timelimit"}
+        if by in ["no decision", "no official scoring"]:
+            return {"type": type_, "by": "no_decision"}
+        if "injur" in by or "accident" in by or "illegal" in by or "tech" in by:
+            return {"type": type_, "by": "technical"}
+    elif cat in ["ends in a no contest", "ends in a no contest *"]:
+        type_ = consts.METHOD_TYPE_NC
+        return {"type": type_}
+    elif cat == "disqualificaton":
+        type_ = consts.METHOD_TYPE_DQ
+        return {"type": type_}
+    elif cat in ["overturned to no contest", "result overturned"]:
+        type_ = consts.METHOD_TYPE_OVERTURNED
+        return {"type": type_}
+    elif cat == "n/a":
+        type_ = consts.METHOD_TYPE_OTHERS
+        return {"type": type_}
+    elif cat == "result unknown":
+        type_ = consts.METHOD_TYPE_UNKNOWN
+        return {"type": type_}
+    raise ParseError("method", normed)
+
+
 def parse_record(record: str) -> dict[str, int]:
     normed = normalize_text(record)
     matched = re.match(

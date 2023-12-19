@@ -160,6 +160,18 @@ METHOD_OVERTURNED = "overturned"
 METHOD_UNKNOWN = "unknown"
 
 
+# Ending method types
+METHOD_TYPE_KO_TKO = "ko/tko"
+METHOD_TYPE_SUBMISSION = "submission"
+METHOD_TYPE_DECISION = "decision"
+METHOD_TYPE_DRAW = "draw"
+METHOD_TYPE_NC = "nc"
+METHOD_TYPE_DQ = "dq"
+METHOD_TYPE_OVERTURNED = "overturned"
+METHOD_TYPE_OTHERS = "others"
+METHOD_TYPE_UNKNOWN = "unknown"
+
+
 # Round Format Types
 ROUND_FORMAT_TYPE_REGULAR = "regular"
 ROUND_FORMAT_TYPE_UNLIM_ROUNDS = "unlim_rounds"

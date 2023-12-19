@@ -21,6 +21,7 @@ from .utils import (
     parse_odds,
     parse_end_time,
     parse_title_info,
+    parse_method,
     is_na,
     calc_age,
 )
@@ -455,6 +456,14 @@ class FightersSpider(scrapy.Spider):
             ).get()
             if match_url is not None and ret["match"] == response.urljoin(match_url):
                 hit = True
+                method = card_section.xpath(
+                    "./div[@class='fightCardResultHolder']/div[@class='fightCardResult']/span[@class='result']/text()"
+                ).get()
+                if method is not None and not is_na(method):
+                    try:
+                        ret["method"] = parse_method(method)
+                    except ParseError as e:
+                        self.logger.error(e)
                 end_time = card_section.xpath(
                     "./div[@class='fightCardResultHolder']/div[@class='fightCardResult']/span[@class='time']/text()"
                 ).get()
@@ -468,7 +477,7 @@ class FightersSpider(scrapy.Spider):
                 break
         if not hit:
             self.logger.error(
-                f"Could not find match {ret['match']} on event {ret['event']}"
+                f"could not find match {ret['match']} on event {ret['event']}"
             )
         return ret
 
