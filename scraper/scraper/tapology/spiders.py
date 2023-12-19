@@ -448,13 +448,10 @@ class FightersSpider(scrapy.Spider):
         card_sections = response.xpath(
             "//ul[@class='fightCard']/li[@class='fightCard']/div[@class='fightCardBout']"
         )
-        if len(card_sections) == 0:
-            self.logger.error(f"No matchups were found on event {ret['event']}")
-            return ret
         hit = False
         for card_section in card_sections:
             match_url = card_section.xpath(
-                "./div[@class='fightCardMatchup' or @class='fightCardMatchup sport']/table/tr/td/span[@class='billing']/a/@href"
+                "./div[contains(@class, 'fightCardMatchup')]/table/tr/td/span[@class='billing']/a/@href"
             ).get()
             if match_url is not None and ret["match"] == response.urljoin(match_url):
                 hit = True
