@@ -484,6 +484,17 @@ class FightersSpider(scrapy.Spider):
                             self.logger.error(e)
                 # Return item
                 return ret
+
+        # Check cancelled matches
+        cancelled = response.xpath(
+            "//ul[@class='eventCancelledBouts']/li[@class='eventCancelledBout']/div[@class='eventCancelledBout']/div[@class='eventCancelledBoutLink']/a/@href"
+        ).getall()
+        for url in cancelled:
+            url = response.urljoin(url)
+            if url == ret["match"]:
+                return ret
+
+        # Could not find the bout link on the event
         self.logger.error(
             f"could not find match {ret['match']} on event {ret['event']}"
         )
