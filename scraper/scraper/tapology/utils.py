@@ -419,6 +419,12 @@ def parse_end_time(end_time: str) -> dict:
     if matched is not None:
         round = int(matched.group(1))
         return {"round": round}
+
+    # rounds, 15:00 total
+    matched = re.match(r"rounds, (\d+:\d+) total", normed)
+    if matched is not None:
+        elapsed_time = matched.group(1)
+        return {"elapsed": elapsed_time}
     raise ParseError("end time", normed)
 
 
@@ -576,18 +582,24 @@ def parse_method(method: str) -> dict:
             "draw (unanimous)",
         ]:
             return {"type": consts.METHOD_TYPE_DRAW, "by": "unanimous"}
-        if by in ["majority", "majority draw"]:
+        if by in [
+            "majority",
+            "majority draw",
+            "majority (result overturned, point deduction)",
+        ]:
             return {"type": consts.METHOD_TYPE_DRAW, "by": "majority"}
         if by in ["split", "split draw"]:
             return {"type": consts.METHOD_TYPE_DRAW, "by": "split"}
+        if "injur" in by or "accident" in by or "illegal" in by or "tech" in by:
+            return {"type": consts.METHOD_TYPE_DRAW, "by": "technical"}
         if by in ["points"]:
             return {"type": consts.METHOD_TYPE_DRAW, "by": "points"}
         if by in ["time limit"]:
             return {"type": consts.METHOD_TYPE_DRAW, "by": "timelimit"}
         if by in ["no decision", "no official scoring"]:
             return {"type": consts.METHOD_TYPE_DRAW, "by": "no_decision"}
-        if "injur" in by or "accident" in by or "illegal" in by or "tech" in by:
-            return {"type": consts.METHOD_TYPE_DRAW, "by": "technical"}
+        if by in ["overturned"]:
+            return {"type": consts.METHOD_OVERTURNED}
     elif cat in ["ends in a no contest", "ends in a no contest *"]:
         return {"type": consts.METHOD_TYPE_NC}
     elif cat == "disqualificaton":

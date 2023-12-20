@@ -472,7 +472,11 @@ class FightersSpider(scrapy.Spider):
                 end_time = card_section.xpath(
                     "./div[@class='fightCardResultHolder']/div[@class='fightCardResult']/span[@class='time']/text()"
                 ).get()
-                if end_time is not None and not is_na(end_time):
+                if (
+                    end_time is not None
+                    and not is_na(end_time)
+                    and not normalize_text(end_time).startswith("original")
+                ):
                     try:
                         ret["end_time"] = parse_end_time(end_time)
                     except ParseError as e:
