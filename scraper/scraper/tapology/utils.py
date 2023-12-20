@@ -516,7 +516,7 @@ def parse_method(method: str) -> dict:
     n = len(normed_split)
     cat = normed_split[0]
     by = None if n == 1 else ",".join(normed_split[1:])
-    if cat == "ko/tko":
+    if cat == "ko/tko" or cat == "ko/tko *":
         if by is None:
             return {"type": consts.METHOD_TYPE_KO_TKO}
         return {"type": consts.METHOD_TYPE_KO_TKO, "by": by}
@@ -580,6 +580,7 @@ def parse_method(method: str) -> dict:
             "unanimous draw",
             "unanimous after extra round",
             "draw (unanimous)",
+            "unanimous (overturned by the promoter)",
         ]:
             return {"type": consts.METHOD_TYPE_DRAW, "by": "unanimous"}
         if by in [
@@ -768,54 +769,43 @@ def to_kg(value: float, unit: str = "lb") -> float:
     return value
 
 
+match_url_correction_map = {
+    "759886-nfc-14-david-balevski-vs-milan-markovic": "759886-nfc-14-david-balevski-vs-milan-nemanja-markovic",
+    "811882-fantom-bull-fight-2-dominik-janikowski-vs-kamil-smetoch": "811882-fantom-bull-fight-2-kamil-smetoch-vs-dominik-janikowski",
+    "195851-acamm-fight-nights-juan-david-bohorquez-vs-gabriel-tanaka-quintero": "195851-acamm-juan-david-bohorquez-vs-gabriel-tanaka-quintero",
+    "189527-fmp-fight-night-paulino-siller-vs-neri-garcia": "189527-fmp-fight-night-paulino-el-cuate-siller-vs-neri-antonio-garcia",
+    "807702-gemmaf-deutsche-meisterschaften-2023-emir-can-the-turkish-bull-al-vs-devid-bondarenko": "825639-german-amateur-mma-chamiponship-2023-emir-can-the-turkish-bull-al-vs-devid-bondarenko",
+    "706957-ffc-5-matej-batinic-vs-attila-petrovszki": "818510-final-fight-championship-5-matej-batinic-vs-attila-petrovszki",
+    "800525-superior-challenge-26-ederson-cristian-lion-macedo-vs-king-karl-albrektsson": "800525-superior-challenge-26-king-karl-albrektsson-vs-ederson-cristian-lion-macedo",
+    "790690-combate-global-killer-kade-kottenbrook-vs-michel-martinez": "790690-combate-global-michel-martinez-vs-killer-kade-kottenbrook",
+    "750457-wlf-mma-63-lilierqian-vs-jianbing-mao": "750457-wlf-mma-63-lilierqian-li-vs-jianbing-mao",
+    "546185-ffc-ernis-abdulakim-uulu-vs-shaykhdin-ismailov": "546185-ffc-ernis-abdilakim-uulu-vs-shaykhdin-ismailov",
+}
+
+
 def correct_match_url(match_url: str) -> str:
     match_id = match_url.split("/")[-1]
-    if match_id == "759886-nfc-14-david-balevski-vs-milan-markovic":
-        match_id = "759886-nfc-14-david-balevski-vs-milan-nemanja-markovic"
-    elif match_id == "811882-fantom-bull-fight-2-dominik-janikowski-vs-kamil-smetoch":
-        match_id = "811882-fantom-bull-fight-2-kamil-smetoch-vs-dominik-janikowski"
-    elif (
-        match_id
-        == "195851-acamm-fight-nights-juan-david-bohorquez-vs-gabriel-tanaka-quintero"
-    ):
-        match_id = "195851-acamm-juan-david-bohorquez-vs-gabriel-tanaka-quintero"
-    elif match_id == "189527-fmp-fight-night-paulino-siller-vs-neri-garcia":
-        match_id = (
-            "189527-fmp-fight-night-paulino-el-cuate-siller-vs-neri-antonio-garcia"
-        )
-    elif (
-        match_id
-        == "807702-gemmaf-deutsche-meisterschaften-2023-emir-can-the-turkish-bull-al-vs-devid-bondarenko"
-    ):
-        match_id = "825639-german-amateur-mma-chamiponship-2023-emir-can-the-turkish-bull-al-vs-devid-bondarenko"
-    elif match_id == "706957-ffc-5-matej-batinic-vs-attila-petrovszki":
-        match_id = (
-            "818510-final-fight-championship-5-matej-batinic-vs-attila-petrovszki"
-        )
-    elif (
-        match_id
-        == "800525-superior-challenge-26-ederson-cristian-lion-macedo-vs-king-karl-albrektsson"
-    ):
-        match_id = "800525-superior-challenge-26-king-karl-albrektsson-vs-ederson-cristian-lion-macedo"
-    elif match_id == "790690-combate-global-killer-kade-kottenbrook-vs-michel-martinez":
-        match_id = "790690-combate-global-michel-martinez-vs-killer-kade-kottenbrook"
-    else:
+    if match_id not in match_url_correction_map:
         return match_url
+    corrected = match_url_correction_map[match_id]
     body = match_url.split("/")[:-1]
-    body.append(match_id)
+    body.append(corrected)
     return "/".join(body)
+
+
+event_url_correction_map = {
+    "106352-gemmaf-deutsche-meisterschaften-2023-day-1": "108242-german-amateur-mma-chamiponship-2023-seniors",
+    "95012-ffc-5": "19563-final-fight-championship-5-rodriguez-vs-simonic",
+}
 
 
 def correct_event_url(event_url: str) -> str:
     event_id = event_url.split("/")[-1]
-    if event_id == "106352-gemmaf-deutsche-meisterschaften-2023-day-1":
-        event_id = "108242-german-amateur-mma-chamiponship-2023-seniors"
-    elif event_id == "95012-ffc-5":
-        event_id = "19563-final-fight-championship-5-rodriguez-vs-simonic"
-    else:
+    if event_id not in event_url_correction_map:
         return event_url
+    corrected = event_url_correction_map[event_id]
     body = event_url.split("/")[:-1]
-    body.append(event_id)
+    body.append(corrected)
     return "/".join(body)
 
 

@@ -24,6 +24,7 @@ DOWNLOADER_MIDDLEWARES = {
     "rotating_proxies.middlewares.BanDetectionMiddleware": 620,
 }
 
+DOWNLOAD_TIMEOUT = 300
 COOKIES_ENABLED = False
 HTTPCACHE_ENABLED = True
 HTTPCACHE_EXPIRATION_SECS = 60 * 60 * 24 * 365

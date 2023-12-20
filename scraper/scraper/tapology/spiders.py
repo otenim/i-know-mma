@@ -256,8 +256,6 @@ class FightersSpider(scrapy.Spider):
             result_sections = response.xpath(
                 f"//section[@class='fighterFightResults']/ul[@id='{division}Results']/li"
             )
-            if len(result_sections) == 0:
-                continue
             for result_section in result_sections:
                 auxiliary = {"fighter": response.url, "division": division}
 
@@ -268,16 +266,6 @@ class FightersSpider(scrapy.Spider):
                 if text is not None and normalize_text(text).startswith(
                     "record ineligible"
                 ):
-                    continue
-
-                # Sport of the match (must)
-                sport = result_section.xpath("./@data-sport").get()
-                if sport is None:
-                    continue
-                try:
-                    auxiliary["sport"] = normalize_sport(sport)
-                except NormalizeError as e:
-                    self.logger.error(e)
                     continue
 
                 # Status of the match (must)
@@ -306,6 +294,16 @@ class FightersSpider(scrapy.Spider):
                     continue
                 try:
                     auxiliary["date"] = normalize_date(date)
+                except NormalizeError as e:
+                    self.logger.error(e)
+                    continue
+
+                # Sport of the match (must)
+                sport = result_section.xpath("./@data-sport").get()
+                if sport is None:
+                    continue
+                try:
+                    auxiliary["sport"] = normalize_sport(sport)
                 except NormalizeError as e:
                     self.logger.error(e)
                     continue
@@ -442,7 +440,9 @@ class FightersSpider(scrapy.Spider):
                 if match_url is None or event_url is None:
                     yield auxiliary
                 else:
-                    req = response.follow(url=event_url, callback=self.parse_event)
+                    req = response.follow(
+                        url=event_url, callback=self.parse_event, dont_filter=True
+                    )
                     req.cb_kwargs["auxiliary"] = auxiliary
                     yield req
 
@@ -454,13 +454,12 @@ class FightersSpider(scrapy.Spider):
         card_sections = response.xpath(
             "//ul[@class='fightCard']/li[@class='fightCard']/div[@class='fightCardBout']"
         )
-        hit = False
         for card_section in card_sections:
             match_url = card_section.xpath(
                 "./div[contains(@class, 'fightCardMatchup')]/table/tr/td/span[@class='billing']/a/@href"
             ).get()
             if match_url is not None and ret["match"] == response.urljoin(match_url):
-                hit = True
+                # Method (optional)
                 method = card_section.xpath(
                     "./div[@class='fightCardResultHolder']/div[@class='fightCardResult']/span[@class='result']/text()"
                 ).get()
@@ -469,6 +468,8 @@ class FightersSpider(scrapy.Spider):
                         ret["method"] = parse_method(method)
                     except ParseError as e:
                         self.logger.error(e)
+
+                # End time (optional)
                 end_time = card_section.xpath(
                     "./div[@class='fightCardResultHolder']/div[@class='fightCardResult']/span[@class='time']/text()"
                 ).get()
@@ -482,12 +483,11 @@ class FightersSpider(scrapy.Spider):
                     except ParseError as e:
                         if e.text not in ["rounds"]:
                             self.logger.error(e)
-            if hit:
-                break
-        if not hit:
-            self.logger.error(
-                f"could not find match {ret['match']} on event {ret['event']}"
-            )
+                # Return item
+                return ret
+        self.logger.error(
+            f"could not find match {ret['match']} on event {ret['event']}"
+        )
         return ret
 
 
