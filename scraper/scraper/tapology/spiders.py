@@ -280,7 +280,6 @@ class FightersSpider(scrapy.Spider):
 
                 # Ignore matches with status = cancelled, upcoming, unknown
                 if auxiliary["status"] in [
-                    consts.STATUS_CANCELLED,
                     consts.STATUS_UPCOMING,
                     consts.STATUS_UNKNOWN,
                 ]:
