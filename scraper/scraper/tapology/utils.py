@@ -651,6 +651,15 @@ match_url_correction_map = {
     "459896-ultimax-fight-night-beksultan-beka-omurzakov-vs-bilal-aliev": "459896-ultimax-fc-6-beksultan-beka-omurzakov-vs-bilal-aliev",
     "365522-mfp-solomon-demin-vs-alexander-gubkin": "365522-mfp-solomon-kane-demin-vs-alexander-gubkin",
     "780518-open-fight-latam-victor-candia-vs-eric-sanchez": "780518-open-fight-latam-5-victor-el-loco-candia-vs-eric-sanchez",
+    "704071-kok-world-series-in-kaunas-jussi-pirttikangas-vs-erikas-golubovskis": "704071-kok-world-series-in-kaunas-erikas-golubovskis-vs-jussi-pirttikangas",
+    "807699-gemmaf-deutsche-meisterschaften-2023-markus-kronenberger-vs-joel-steinhoff": "825589-german-amateur-mma-chamiponship-2023-markus-kronenberger-vs-joel-steinhoff",
+    "807687-gemmaf-deutsche-meisterschaften-2023-emir-can-the-turkish-bull-al-vs-marian-schneider": "825624-german-amateur-mma-chamiponship-2023-emir-can-the-turkish-bull-al-vs-marian-schneider",
+    "807701-gemmaf-deutsche-meisterschaften-2023-marian-schneider-vs-soren-holthausen": "825587-german-amateur-mma-chamiponship-2023-marian-schneider-vs-soren-holthausen",
+    "807690-gemmaf-deutsche-meisterschaften-2023-devid-bondarenko-vs-markus-kronenberger": "825625-german-amateur-mma-chamiponship-2023-devid-bondarenko-vs-markus-kronenberger",
+    "807686-gemmaf-deutsche-meisterschaften-2023-emir-can-the-turkish-bull-al-vs-vincent-zymaj": "825586-german-amateur-mma-chamiponship-2023-emir-can-the-turkish-bull-al-vs-vincent-zymaj",
+    "807694-gemmaf-deutsche-meisterschaften-2023-devid-bondarenko-vs-daniel-luthardt": "825588-german-amateur-mma-chamiponship-2023-devid-bondarenko-vs-daniel-luthardt",
+    "618351-atf-5-sherzod-yuldashev-vs-sherzod-irgashev": "824387-atf-5-shakhzod-yoldashev-vs-shakhzod-ergashev",
+    "459901-ultimax-fight-night-vyacheslav-gagiev-vs-sahil-mirzaev": "459901-ultimax-fc-6-vyacheslav-gagiev-vs-sahil-mirzaev",
 }
 
 
