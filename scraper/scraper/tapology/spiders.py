@@ -213,18 +213,14 @@ class FightersSpider(scrapy.Spider):
             "./ul/li/strong[text()='Born:']/following-sibling::span[1]/text()"
         ).get()
         if born is not None and not is_na(born):
-            ret["born"] = []
-            for p in normalize_text(born).split(","):
-                ret["born"].append(p.strip())
+            ret["born"] = normalize_text(born)
 
         # Fighting out of (optional)
         out_of = profile_section.xpath(
             "./ul/li/strong[text()='Fighting out of:']/following-sibling::span[1]/text()"
         ).get()
         if out_of is not None and not is_na(out_of):
-            ret["out_of"] = []
-            for o in normalize_text(out_of).split(","):
-                ret["out_of"].append(o.strip())
+            ret["out_of"] = normalize_text(out_of)
 
         # Head Coach (optional)
         head_coach = profile_section.xpath(
