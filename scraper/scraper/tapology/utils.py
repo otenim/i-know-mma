@@ -25,7 +25,7 @@ def normalize_status(status: str) -> str:
         return normed
     if normed in ["win"]:
         return consts.STATUS_WIN
-    if normed in ["loss"]:
+    if normed in ["loss", "lose"]:
         return consts.STATUS_LOSS
     if normed in ["draw"]:
         return consts.STATUS_DRAW
@@ -136,7 +136,7 @@ def normalize_billing(billing: str) -> str:
         return consts.BILLING_CO_MAIN
     if normed in ["main card"]:
         return consts.BILLING_MAIN_CARD
-    if normed in ["preliminary card"]:
+    if normed in ["preliminary card", "prelim"]:
         return consts.BILLING_PRELIM_CARD
     if normed in ["postlim"]:
         return consts.BILLING_POSTLIM_CARD
@@ -152,7 +152,7 @@ def normalize_division(division: str) -> str:
     raise NormalizeError("division", normed)
 
 
-def normalize_date(date: str) -> str:
+def parse_date(date: str) -> str:
     normed = normalize_text(date)
     # 2014.09.09
     matched = re.search(r"(\d{4})\.(\d{2})\.(\d{2})", normed)
@@ -162,7 +162,7 @@ def normalize_date(date: str) -> str:
     matched = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", normed)
     if matched is not None:
         return f"{matched.group(3):04}-{matched.group(1):02}-{matched.group(2):02}"
-    raise NormalizeError("date", normed)
+    raise ParseError("date", normed)
 
 
 def normalize_round_format(round_format: str) -> str:
