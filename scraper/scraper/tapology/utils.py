@@ -345,22 +345,25 @@ def parse_weight_summary(weight_summary: str) -> dict[str, float]:
     ret = {}
 
     # Heavyweight
+    # *numeric weight*
     # 110 kg|kgs|lb|lbs
     # 110 kg|kgs|lb|lbs (49.9 kg|kgs|lb|lbs)
-    matched = re.match(r"(.*weight|([\d\.]+) (kgs?|lbs?))", normed_split[0])
+    matched = re.match(
+        r"(.*weight|\*numeric weight\*|([\d\.]+) (kgs?|lbs?))", normed_split[0]
+    )
     if matched is None:
         raise ParseError("weight summary", normed)
-    if matched.group(2) is not None and matched.group(3) is not None:
+    if matched.group(1) == "*numeric weight*":
+        pass
+    elif matched.group(2) is not None and matched.group(3) is not None:
         value, unit = float(matched.group(2)), matched.group(3)
         ret["class"] = to_weight_class(value, unit=unit)
         ret["limit"] = to_kg(value, unit=unit)
     else:
         try:
-            weight_class = normalize_weight_class(matched.group(1))
+            ret["class"] = normalize_weight_class(matched.group(1))
         except NormalizeError as e:
             raise ParseError("weight summary", normed) from e
-        else:
-            ret["class"] = weight_class
     for s in normed_split[1:]:
         # 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
         # Weigh-In 120 kg|kgs|lb|lbs (264.6 kg|kgs|lb|lbs)
