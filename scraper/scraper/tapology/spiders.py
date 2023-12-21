@@ -515,6 +515,10 @@ class FightersSpider(scrapy.Spider):
                 announcer = section.xpath("./span/text()").get()
                 if announcer is not None:
                     ret["ring_announcer"] = normalize_text(announcer)
+            elif label == "ownership:":
+                ownership = section.xpath("./span/text()").get()
+                if ownership is not None:
+                    ret["ownership"] = normalize_text(ownership)
 
         # Bout cards (optional)
         bout_card_sections = response.xpath(
@@ -540,19 +544,27 @@ class FightersSpider(scrapy.Spider):
                 if fighter_name is None:
                     fighter_name = fighter_section.xpath("./text()").get()
                     if fighter_name is not None and not is_na(fighter_name):
-                        fighter_item["name"] = fighter_name
+                        fighter_item["name"] = normalize_text(fighter_name)
+                else:
+                    fighter_item["name"] = normalize_text(fighter_name)
 
                 # Fighter status (optional)
-                fighter_status = fighter_section.xpath(
-                    "./span[@class='resultIcon']/img/@src"
+                fighter_status = bout_card_section.xpath(
+                    f"./div[contains(@class, 'fightCardFighterBout') and contains(@class, '{side}')]/@class"
                 ).get()
-                if fighter_status is None:
-                    fighter_status = consts.STATUS_UNKNOWN
-                else:
-                    fighter_status = normalize_status(
-                        fighter_status.split("/")[-1].split("_")[0]
-                    )
-                fighter_item["status"] = fighter_status
+                if fighter_status is not None:
+                    split = normalize_text(fighter_status).split(" ")
+                    if len(split) == 3:
+                        # fightCardFighterBout left win
+                        fighter_status = split[-1]
+                        try:
+                            fighter_item["status"] = normalize_status(fighter_status)
+                        except NormalizeError as e:
+                            self.logger.error(e)
+                    else:
+                        # fightCardFighterBout left
+                        fighter_item["status"] = consts.STATUS_UNKNOWN
+
                 bout_item[f"fighter_{side}"] = fighter_item
 
             # Match ID (optional)
@@ -561,6 +573,18 @@ class FightersSpider(scrapy.Spider):
             ).get()
             if match_url is not None and not is_na(match_url):
                 bout_item["match"] = response.urljoin(match_url)
+
+            # Sport (optional)
+            sport = bout_card_section.xpath(
+                "./div[@class='fightCardMatchup sport']/table/tr/td/div[@class='fightCardSport']/text()"
+            ).get()
+            if sport is not None:
+                try:
+                    bout_item["sport"] = normalize_sport(sport)
+                except NormalizeError as e:
+                    self.logger.error(e)
+            else:
+                bout_item["sport"] = consts.SPORT_MMA
 
             # Billing (optional)
             billing = bout_card_section.xpath(

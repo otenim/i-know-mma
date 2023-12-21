@@ -31,7 +31,7 @@ def normalize_status(status: str) -> str:
         return consts.STATUS_DRAW
     if normed in ["cancelled", "cancelled bout"]:
         return consts.STATUS_CANCELLED
-    if normed in ["no contest", "overturned to no contest"]:
+    if normed in ["no contest", "overturned to no contest", "nc"]:
         return consts.STATUS_NC
     if normed in ["upcoming", "confirmed upcoming bout"]:
         return consts.STATUS_UPCOMING
@@ -44,19 +44,28 @@ def normalize_sport(sport: str) -> str:
     normed = normalize_text(sport)
     if normed in consts.SPORTS:
         return normed
-    if normed in ["mma", "pancrase"]:
+    if normed in ["mma", "pancrase", "modified mma"]:
         return consts.SPORT_MMA
-    if normed in ["knuckle_mma"]:
+    if normed in ["knuckle_mma", "bare knuck mma"]:
         return consts.SPORT_KNUCKLE_MMA
-    if normed in ["boxing", "boxing_cage"]:
+    if normed in [
+        "boxing",
+        "modified boxing",
+    ]:
         return consts.SPORT_BOX
-    if normed in ["knuckle"]:
+    if normed in [
+        "boxing_cage",
+        "boxing (cage)",
+        "modified boxing (cage)",
+    ]:
+        return consts.SPORT_CAGE_BOX
+    if normed in ["knuckle", "bare knuck box"]:
         return consts.SPORT_KNUCKLE_BOX
-    if normed in ["kickboxing"]:
+    if normed in ["kickboxing", "modified kickboxing"]:
         return consts.SPORT_KICK
-    if normed in ["muay"]:
+    if normed in ["muay", "muay thai", "modified muay thai"]:
         return consts.SPORT_MUAY
-    if normed in ["karate"]:
+    if normed in ["karate", "modified karate"]:
         return consts.SPORT_KARATE
     if normed in ["sanda"]:
         return consts.SPORT_SANDA
@@ -70,17 +79,17 @@ def normalize_sport(sport: str) -> str:
         return consts.SPORT_WRESTLE
     if normed in ["sambo"]:
         return consts.SPORT_SAMBO
-    if normed in ["valetudo"]:
+    if normed in ["valetudo", "vale tudo"]:
         return consts.SPORT_VALE
     if normed in ["judo"]:
         return consts.SPORT_JUDO
-    if normed in ["combat_jj"]:
+    if normed in ["combat_jj", "combat jiu-jitsu"]:
         return consts.SPORT_COMBAT_JJ
     if normed in ["taekwondo"]:
         return consts.SPORT_TAEK
-    if normed in ["slap"]:
+    if normed in ["slap", "slap fighting"]:
         return consts.SPORT_SLAP
-    if normed in ["custom"]:
+    if normed in ["custom", "custom rules", "modified custom rules"]:
         return consts.SPORT_CUSTOM
     raise NormalizeError("sport", normed)
 

@@ -61,6 +61,7 @@ WEIGHT_CLASSES = [
 SPORT_MMA = "mma"
 SPORT_KNUCKLE_MMA = "knuckle_mma"
 SPORT_BOX = "box"
+SPORT_CAGE_BOX = "cage_box"
 SPORT_KNUCKLE_BOX = "knuckle_box"
 SPORT_KICK = "kick"
 SPORT_MUAY = "muay"
@@ -81,6 +82,7 @@ SPORTS = [
     SPORT_MMA,
     SPORT_KNUCKLE_MMA,
     SPORT_BOX,
+    SPORT_CAGE_BOX,
     SPORT_KNUCKLE_BOX,
     SPORT_KICK,
     SPORT_MUAY,
