@@ -660,6 +660,17 @@ match_url_correction_map = {
     "807694-gemmaf-deutsche-meisterschaften-2023-devid-bondarenko-vs-daniel-luthardt": "825588-german-amateur-mma-chamiponship-2023-devid-bondarenko-vs-daniel-luthardt",
     "618351-atf-5-sherzod-yuldashev-vs-sherzod-irgashev": "824387-atf-5-shakhzod-yoldashev-vs-shakhzod-ergashev",
     "459901-ultimax-fight-night-vyacheslav-gagiev-vs-sahil-mirzaev": "459901-ultimax-fc-6-vyacheslav-gagiev-vs-sahil-mirzaev",
+    "793348-grachan-65-daiki-asahina-vs-atsushi-makigaya": "793348-grachan-65-atsushi-makigaya-vs-daiki-asahina",
+    "807467-wlf-mma-69-yuele-huang-vs-reginaldo-vieira": "807467-wlf-mma-69-reginaldo-vieira-vs-yuele-huang",
+    "459901-ultimax-fight-night-vyacheslav-gagiev-vs-sahil-mirzaev": "459901-ultimax-fc-6-vyacheslav-gagiev-vs-sahil-mirzaev",
+    "538885-wlf-w-a-r-s-40-shuai-zhang-vs-xionghui-zhou": "828898-wlf-w-a-r-s-40-shuai-zhang-vs-xionghui-zhou",
+    "824222-caestus-mma-marc-webster-vs-yakup-kurt": "828551-caestus-mma-marcus-webster-vs-yakup-kurt",
+    "782459-open-fight-latam-pedro-gonzalez-vs-diego-tejon-alvarez": "782459-open-fight-latam-5-pedro-gonzalez-vs-diego-tejon-alvarez",
+    "459763-ultimax-fight-night-rufani-valiev-vs-hamid-eftekhari": "459763-ultimax-fc-6-rufani-black-borz-valiev-vs-hamid-eftekhari",
+    "770517-aba-fighting-championship-sulangrangbo-vs-baofu-li": "770517-aba-fighting-championship-sulangrangbo-sulang-vs-baofu-li",
+    "391689-mfp-224-kiril-soloviev-vs-usman-sherkhonov": "391689-mfp-224-usmon-sherkhonov-vs-kiril-antikiller-soloviev",
+    "378670-mfp-222-vasily-atlasov-vs-kiril-soloviev": "378670-mfp-222-vasily-atlasov-vs-kiril-antikiller-soloviev",
+    "808147-gemmaf-deutsche-meisterschaften-2023-martin-horsch-vs-lukas-sundi": "825613-german-amateur-mma-chamiponship-2023-martin-horsch-vs-lukas-sundi",
 }
 
 
