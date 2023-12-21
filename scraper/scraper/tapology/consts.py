@@ -188,7 +188,3 @@ DIVISIONS = [
     DIVISION_PRO,
     DIVISION_AM,
 ]
-
-
-# Expected values for "not available"
-VALUES_NOT_AVAILABLE = ["n/a", "na"]
