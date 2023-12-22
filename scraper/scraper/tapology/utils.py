@@ -71,7 +71,7 @@ def normalize_sport(sport: str) -> str:
         return consts.SPORT_SANDA
     if normed in ["lethwei"]:
         return consts.SPORT_LETHWEI
-    if normed in ["grappling"]:
+    if normed in ["grappling", "modified grappling"]:
         return consts.SPORT_GRAPPLE
     if normed in ["shootboxing"]:
         return consts.SPORT_SHOOT
