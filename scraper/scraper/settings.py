@@ -1,28 +1,28 @@
 BOT_NAME = "bot"
 SPIDER_MODULES = ["scraper.tapology"]
 
-# CONCURRENT_REQUESTS = 20
-CONCURRENT_REQUESTS_PER_DOMAIN = 100
-AUTOTHROTTLE_ENABLED = True
-AUTOTHROTTLE_TARGET_CONCURRENCY = 50
-# DOWNLOAD_DELAY = 0.5
-ROTATING_PROXY_LIST = {
-    "rotating-residential.geonode.com:9000",
-    "rotating-residential.geonode.com:9001",
-    "rotating-residential.geonode.com:9002",
-    "rotating-residential.geonode.com:9003",
-    "rotating-residential.geonode.com:9004",
-    "rotating-residential.geonode.com:9005",
-    "rotating-residential.geonode.com:9006",
-    "rotating-residential.geonode.com:9007",
-    "rotating-residential.geonode.com:9008",
-    "rotating-residential.geonode.com:9009",
-    "rotating-residential.geonode.com:9010",
-}
-DOWNLOADER_MIDDLEWARES = {
-    "rotating_proxies.middlewares.RotatingProxyMiddleware": 610,
-    "rotating_proxies.middlewares.BanDetectionMiddleware": 620,
-}
+CONCURRENT_REQUESTS = 1
+# CONCURRENT_REQUESTS_PER_DOMAIN = 100
+# AUTOTHROTTLE_ENABLED = True
+# AUTOTHROTTLE_TARGET_CONCURRENCY = 50
+DOWNLOAD_DELAY = 3
+# ROTATING_PROXY_LIST = {
+#     "rotating-residential.geonode.com:9000",
+#     "rotating-residential.geonode.com:9001",
+#     "rotating-residential.geonode.com:9002",
+#     "rotating-residential.geonode.com:9003",
+#     "rotating-residential.geonode.com:9004",
+#     "rotating-residential.geonode.com:9005",
+#     "rotating-residential.geonode.com:9006",
+#     "rotating-residential.geonode.com:9007",
+#     "rotating-residential.geonode.com:9008",
+#     "rotating-residential.geonode.com:9009",
+#     "rotating-residential.geonode.com:9010",
+# }
+# DOWNLOADER_MIDDLEWARES = {
+#     "rotating_proxies.middlewares.RotatingProxyMiddleware": 610,
+#     "rotating_proxies.middlewares.BanDetectionMiddleware": 620,
+# }
 
 DOWNLOAD_TIMEOUT = 300
 COOKIES_ENABLED = False
