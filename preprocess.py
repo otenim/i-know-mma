@@ -162,7 +162,9 @@ def count_nan(x: pd.Series | pd.DataFrame) -> int:
 
 def shorten_url(url: pd.Series | str) -> pd.Series | str:
     if isinstance(url, pd.Series):
-        return url.apply(lambda item: item if pd.isna(item) else item.split("/")[-1])
+        return url.apply(lambda x: x if pd.isna(x) else x.split("/")[-1]).astype(
+            url.dtype
+        )
     return url.split("/")[-1]
 
 
