@@ -188,3 +188,8 @@ DIVISIONS = [
     DIVISION_PRO,
     DIVISION_AM,
 ]
+
+
+# Sex of the fighter
+SEX_WOMAN = "w"
+SEX_MAN = "m"
