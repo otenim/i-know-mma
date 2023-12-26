@@ -28,6 +28,7 @@ def main(json_dir: str, out_dir: str):
 
     # Fill columns of results
     results = fill_match_id(results)
+    results = fill_age(results, profiles)
     profiles.info(verbose=True)
     results.info(verbose=True)
     events.info(verbose=True)
@@ -188,35 +189,48 @@ def to_minutes(time: pd.Series | str, dtype="float32") -> pd.Series | float:
     return calc_minutes(time)
 
 
+def fill_age(results: pd.DataFrame, profiles: pd.DataFrame) -> pd.DataFrame:
+    merged = pd.merge(
+        results,
+        profiles[["id", "date_of_birth"]].set_index("id"),
+        left_on="fighter",
+        right_index=True,
+        how="left",
+    )
+    results["age"].fillna(
+        ((merged["date"] - merged["date_of_birth"]).dt.days / 365.25).astype(
+            results["age"].dtype
+        ),
+        inplace=True,
+    )
+    return results
+
+
 def fill_date_of_birth(profiles: pd.DataFrame, results: pd.DataFrame) -> pd.DataFrame:
     date_at_debut = results.groupby("fighter")["date"].min().rename("date_at_debut")
-    profiles = pd.merge(
+    merged = pd.merge(
         profiles, date_at_debut, left_on="id", right_index=True, how="left"
     )
     age_at_debut = results.groupby("fighter")["age"].min().rename("age_at_debut")
-    profiles = pd.merge(
-        profiles, age_at_debut, left_on="id", right_index=True, how="left"
-    )
+    merged = pd.merge(merged, age_at_debut, left_on="id", right_index=True, how="left")
     mean_age_at_debut = (
-        profiles.groupby(["weight_class", "sex"])["age_at_debut"]
+        merged.groupby(["weight_class", "sex"])["age_at_debut"]
         .mean()
         .rename("mean_age_at_debut")
     )
-    profiles = pd.merge(
-        profiles,
+    merged = pd.merge(
+        merged,
         mean_age_at_debut,
         left_on=["weight_class", "sex"],
         right_index=True,
         how="left",
     )
     profiles["date_of_birth"].fillna(
-        profiles["date_at_debut"]
-        - pd.to_timedelta(profiles["mean_age_at_debut"] * 365.25, unit="d"),
+        merged["date_at_debut"]
+        - pd.to_timedelta(merged["mean_age_at_debut"] * 365.25, unit="d"),
         inplace=True,
     )
-    return profiles.drop(
-        ["date_at_debut", "age_at_debut", "mean_age_at_debut"], axis="columns"
-    )
+    return profiles
 
 
 def fill_weight_class(profiles: pd.DataFrame, results: pd.DataFrame) -> pd.DataFrame:
