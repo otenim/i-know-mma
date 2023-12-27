@@ -61,11 +61,25 @@ class FightersSpider(scrapy.Spider):
         fighters = response.xpath("//table[@class='siteSearchResults']/tr")[1:]
         for fighter in fighters:
             url = fighter.xpath("./td[1]/a/@href").get()
-            if url is not None:
-                if self.scope == "profile":
-                    yield response.follow(url, callback=self.parse_fighter_profile)
-                elif self.scope in ["result", "event"]:
-                    yield response.follow(url, callback=self.parse_fighter_results)
+            if url is None:
+                name = fighter.xpath("./td[1]/text()").get()
+                self.logger.error(f"url is missing for fighter {name}")
+                continue
+            weight_class = fighter.xpath("./td[5]/text()").get()
+            if weight_class is None:
+                self.logger.error(f"weight class is missing for fighter {url}")
+                continue
+            try:
+                weight_class = normalize_weight_class(weight_class)
+            except NormalizeError as e:
+                self.logger.error(e)
+                continue
+            if self.scope == "profile":
+                req = response.follow(url, callback=self.parse_fighter_profile)
+                req.cb_kwargs["weight_class"] = weight_class
+                yield req
+            elif self.scope in ["result", "event"]:
+                yield response.follow(url, callback=self.parse_fighter_results)
 
         # Move to the next page
         next_url = response.xpath(
@@ -74,8 +88,10 @@ class FightersSpider(scrapy.Spider):
         if next_url is not None:
             yield response.follow(next_url, callback=self.parse)
 
-    def parse_fighter_profile(self, response: TextResponse) -> dict | None:
-        ret = {}
+    def parse_fighter_profile(
+        self, response: TextResponse, weight_class: str
+    ) -> dict | None:
+        ret = {"weight_class": weight_class}
 
         # Fighter ID (must)
         ret["id"] = response.url
@@ -131,18 +147,6 @@ class FightersSpider(scrapy.Spider):
             try:
                 ret["date_of_birth"] = parse_date(date_of_birth)
             except ParseError as e:
-                self.logger.error(e)
-
-        # Weight class (optional)
-        weight_class = profile_section.xpath(
-            "./ul/li/strong[text()='Weight Class:']/following-sibling::span[1]/text()"
-        ).get()
-        if weight_class is not None and not is_na(weight_class):
-            try:
-                normed = normalize_weight_class(weight_class)
-                if normed is not None:
-                    ret["weight_class"] = normed
-            except NormalizeError as e:
                 self.logger.error(e)
 
         # Last weigh-in (optional)
