@@ -18,12 +18,10 @@ from scraper.scraper.tapology import consts
 def main(json_dir: str, out_dir: str):
     # Load json files
     profiles, results, _, _ = load_dataframes(json_dir)
-    click.secho("Profiles (plain)", bg="green")
-    profiles.info(verbose=True)
-    click.secho("Results (plain)", bg="green")
-    results.info(verbose=True)
 
     # Fill columns of profiles
+    click.secho("Profiles (plain)", bg="green")
+    profiles.info(verbose=True)
     for column in ["nationality", "affiliation", "college", "head_coach"]:
         profiles[column].fillna("n/a", inplace=True)
     profiles = fill_height_and_reach(profiles)
@@ -31,12 +29,14 @@ def main(json_dir: str, out_dir: str):
     click.secho("Profiles (filled)", bg="yellow")
     profiles.info(verbose=True)
 
-    # # Fill columns of results
-    # results = fill_age(results, profiles)
-    # profiles.info(verbose=True)
-    # results.info(verbose=True)
-    # events.info(verbose=True)
-    # promotions.info(verbose=True)
+    # Fill columns of results
+    click.secho("Results (plain)", bg="green")
+    results.info(verbose=True)
+    for column in ["billing", "referee", "title_info.for", "title_info.as"]:
+        results[column].fillna("n/a", inplace=True)
+    results = fill_age(results, profiles)
+    click.secho("Results (filled)", bg="yellow")
+    results.info(verbose=True)
 
 
 def load_dataframes(
@@ -200,18 +200,18 @@ def to_minutes(time: pd.Series | str, dtype="float32") -> pd.Series | float:
 def fill_age(results: pd.DataFrame, profiles: pd.DataFrame) -> pd.DataFrame:
     merged = pd.merge(
         results,
-        profiles[["id", "date_of_birth"]].set_index("id"),
+        profiles[["date_of_birth"]],
         left_on="fighter",
         right_index=True,
         how="left",
     )
-    results["age"].fillna(
+    merged["age"].fillna(
         ((merged["date"] - merged["date_of_birth"]).dt.days / 365.25).astype(
-            results["age"].dtype
+            merged["age"].dtype
         ),
         inplace=True,
     )
-    return results
+    return merged.drop(["date_of_birth"], axis="columns")
 
 
 def fill_date_of_birth(profiles: pd.DataFrame, results: pd.DataFrame) -> pd.DataFrame:
