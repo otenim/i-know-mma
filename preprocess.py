@@ -4,6 +4,7 @@ import click
 import json
 import os
 from scraper.scraper.tapology import consts
+from scraper.scraper.tapology.utils import to_weight_limit
 
 
 @click.command()
@@ -35,6 +36,7 @@ def main(json_dir: str, out_dir: str):
     for column in ["billing", "referee", "title_info.for", "title_info.as"]:
         results[column].fillna("n/a", inplace=True)
     results = fill_age(results, profiles)
+    results = fill_weight(results, profiles)
     click.secho("Results (filled)", bg="yellow")
     results.info(verbose=True)
 
@@ -100,7 +102,6 @@ def load_dataframes(
                     "record_after.d": "float32",
                     "event": "string",
                     "billing": "string",
-                    "round_format": "string",
                     "referee": "string",
                     "weight.class": "string",
                     "weight.limit": "float32",
@@ -285,6 +286,58 @@ def fill_match_id(results: pd.DataFrame) -> pd.DataFrame:
         inplace=True,
     )
     return ret
+
+
+def fill_weight(results: pd.DataFrame, profiles: pd.DataFrame) -> pd.DataFrame:
+    copied = results.copy()
+
+    # Replace weight.class cells with values "open" or "catch", with nan
+    mask = (copied["weight.class"] == consts.WEIGHT_CLASS_CATCH) | (
+        copied["weight.class"] == consts.WEIGHT_CLASS_OPEN
+    )
+    copied.loc[mask, "weight.class"] = None
+
+    # Fill weight.class cells with the previous values
+    copied.sort_values(["fighter", "date"], ascending=[True, False], inplace=True)
+    copied["weight.class"].bfill(inplace=True)
+
+    # Fill weight.class cells with fighter's weight class
+    copied["weight.class"].fillna(
+        pd.merge(
+            copied[["fighter"]],
+            profiles[["weight_class"]],
+            left_on="fighter",
+            right_index=True,
+            how="left",
+        )["weight_class"],
+        inplace=True,
+    )
+
+    # Fill weight limit
+    copied["weight.limit"].fillna(
+        copied["weight.class"]
+        .map(lambda weight_class: to_weight_limit(weight_class))
+        .astype(copied["weight.limit"].dtype),
+        inplace=True,
+    )
+
+    # Fill weight limit
+    # mask = copied["weight.class"] == consts.WEIGHT_CLASS_S_HEAVY
+    # copied.loc[mask, "weight.limit"] = (
+    #     copied.loc[mask]
+    #     .groupby("fighter")["weight.limit"]
+    #     .transform(lambda series: series.fillna(series.mean()))
+    # )
+    mask = copied["weight.limit"].isna() & (
+        copied["weight.class"] == consts.WEIGHT_CLASS_S_HEAVY
+    )
+    print(copied.loc[mask, ["weight.limit", "weight.class"]])
+    copied.loc[mask, "weight.limit"] = (
+        copied.loc[mask]
+        .groupby("fighter")["weight.limit"]
+        .transform(lambda series: series.fillna(series.mean()))
+    )
+    return copied
 
 
 if __name__ == "__main__":

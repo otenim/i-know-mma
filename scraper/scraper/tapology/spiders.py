@@ -11,7 +11,7 @@ from .utils import (
     parse_date,
     normalize_weight_class,
     normalize_billing,
-    normalize_round_format,
+    parse_round_format,
     parse_last_weigh_in,
     parse_nickname,
     parse_record,
@@ -396,10 +396,10 @@ class FightersSpider(scrapy.Spider):
                             ).get()
                             if round_format is not None and not is_na(round_format):
                                 try:
-                                    auxiliary["round_format"] = normalize_round_format(
+                                    auxiliary["round_format"] = parse_round_format(
                                         round_format
                                     )
-                                except NormalizeError as e:
+                                except ParseError as e:
                                     self.logger.error(e)
                         elif label == "referee:":
                             # Referee of the match

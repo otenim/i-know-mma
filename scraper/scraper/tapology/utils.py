@@ -174,27 +174,48 @@ def parse_date(date: str) -> str:
     raise ParseError("date", normed)
 
 
-def normalize_round_format(round_format: str) -> str:
+def parse_round_format(round_format: str) -> dict:
     normed = normalize_text(round_format)
 
     # 5 x 5 minute rounds
     # 5 x 5 min
     matched = re.match(r"(\d+) x (\d+)", normed)
     if matched is not None:
-        format = "-".join([matched.group(2) for _ in range(int(matched.group(1)))])
-        return format
+        round_lengths = [int(matched.group(2))] * int(matched.group(1))
+        return {
+            "type": consts.ROUND_FORMAT_TYPE_REGULAR,
+            "round_lengths": round_lengths,
+            "rounds": len(round_lengths),
+            "length": sum(round_lengths),
+            "ot": False,
+            "ot_length": 0,
+        }
 
     # 5 min one round
     matched = re.match(r"(\d+) min one round$", normed)
     if matched is not None:
-        format = matched.group(1)
-        return format
+        l = int(matched.group(1))
+        return {
+            "type": consts.ROUND_FORMAT_TYPE_REGULAR,
+            "round_lengths": [l],
+            "rounds": 1,
+            "length": l,
+            "ot": False,
+            "ot_length": 0,
+        }
 
     # 5 min round plus overtime
     matched = re.match(r"(\d+) min round plus overtime$", normed)
     if matched is not None:
-        format = f"{matched.group(1)}-ot"
-        return format
+        l = int(matched.group(1))
+        return {
+            "type": consts.ROUND_FORMAT_TYPE_REGULAR,
+            "round_lengths": [l],
+            "rounds": 1,
+            "length": l,
+            "ot": True,
+            "ot_length": l,
+        }
 
     # 5-5
     # 5-5-5
@@ -205,33 +226,51 @@ def normalize_round_format(round_format: str) -> str:
     # 5-5 two rounds
     matched = re.match(r"(\d+(?:\-\d+)+)( plus overtime)?", normed)
     if matched is not None:
-        format = matched.group(1)
-        if matched.group(2) is not None:
-            format += "-ot"
-        return format
+        round_lengths = list(map(lambda s: int(s), matched.group(1).split("-")))
+        ot = matched.group(2) is not None
+        return {
+            "type": consts.ROUND_FORMAT_TYPE_REGULAR,
+            "round_lengths": round_lengths,
+            "rounds": len(round_lengths),
+            "length": sum(round_lengths),
+            "ot": ot,
+            "ot_length": round_lengths[-1] if ot else 0,
+        }
 
     # 5 + 5 two rounds
     # 5 + 5 + 5 three rounds
     matched = re.match(r"(\d+(?: \+ \d+)+)", normed)
     if matched is not None:
-        format = "-".join(list(map(lambda x: x.strip(), matched.group(1).split("+"))))
-        return format
+        round_lengths = list(map(lambda s: int(s.strip()), matched.group(1).split("+")))
+        return {
+            "type": consts.ROUND_FORMAT_TYPE_REGULAR,
+            "round_lengths": round_lengths,
+            "rounds": len(round_lengths),
+            "length": sum(round_lengths),
+            "ot": False,
+            "ot_length": 0,
+        }
 
     # 5 min unlim rounds
     matched = re.match(r"(\d+) min unlim rounds", normed)
     if matched is not None:
-        format = matched.group(1) + "-*"
-        return format
+        return {
+            "type": consts.ROUND_FORMAT_TYPE_UNLIM_ROUNDS,
+            "round_length": int(matched.group(1)),
+        }
 
     # 1 Round, No Limit
     if normed == "1 round, no limit":
-        return "*"
+        return {"type": consts.ROUND_FORMAT_TYPE_UNLIM_ROUND_LENGTH, "rounds": 1}
 
     # 3 Rounds
     matched = re.match(r"(\d+) rounds", normed)
     if matched is not None:
-        return "-".join(["?"] * int(matched.group(1)))
-    raise NormalizeError("round format", normed)
+        return {
+            "type": consts.ROUND_FORMAT_TYPE_ROUND_LENGTH_UNKNONW,
+            "rounds": int(matched.group(1)),
+        }
+    raise ParseError("round format", normed)
 
 
 def parse_round_time(round_time: str) -> dict[str, int]:
@@ -499,51 +538,6 @@ def parse_record(record: str) -> dict[str, int]:
             "d": 0 if d is None else int(d),
         }
     raise ParseError("record", normed)
-
-
-def parse_round_format(round_format: str) -> dict:
-    # 4-4-4
-    # 4
-    # 4-4-4-ot
-    # 4-ot
-    matched = re.match(r"^(\d+(?:\-(?:\d+|ot))*)$", round_format)
-    if matched is not None:
-        round_minutes = []
-        ot = False
-        for s in round_format.split("-"):
-            if s == "ot":
-                ot = True
-            else:
-                round_minutes.append(int(s))
-        ret = {
-            "type": consts.ROUND_FORMAT_TYPE_REGULAR,
-            "ot": ot,
-            "rounds": len(round_minutes),
-            "minutes": sum(round_minutes),
-            "round_minutes": round_minutes,
-            "ot_minutes": round_minutes[-1] if ot else 0,
-        }
-        return ret
-
-    # 4-*
-    matched = re.match(r"^(\d+\-\*)$", round_format)
-    if matched is not None:
-        m = int(round_format.split("-")[0])
-        return {"type": consts.ROUND_FORMAT_TYPE_UNLIM_ROUNDS, "minutes_per_round": m}
-
-    # *
-    if round_format == "*":
-        return {"type": consts.ROUND_FORMAT_TYPE_UNLIM_ROUND_TIME, "rounds": 1}
-
-    # ?
-    # ?-?-?
-    matched = re.match(r"^(\?(?:\-\?)*)$", round_format)
-    if matched is not None:
-        return {
-            "type": consts.ROUND_FORMAT_TYPE_ROUND_TIME_UNKNONW,
-            "rounds": len(round_format.split("-")),
-        }
-    raise ParseError("round format", round_format)
 
 
 def calc_age(date: str, date_of_birth: str) -> float:

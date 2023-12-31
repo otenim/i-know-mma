@@ -177,8 +177,8 @@ METHOD_TYPE_UNKNOWN = "unknown"
 # Round Format Types
 ROUND_FORMAT_TYPE_REGULAR = "regular"
 ROUND_FORMAT_TYPE_UNLIM_ROUNDS = "unlim_rounds"
-ROUND_FORMAT_TYPE_UNLIM_ROUND_TIME = "unlim_round_time"
-ROUND_FORMAT_TYPE_ROUND_TIME_UNKNONW = "round_time_unknown"
+ROUND_FORMAT_TYPE_UNLIM_ROUND_LENGTH = "unlim_round_length"
+ROUND_FORMAT_TYPE_ROUND_LENGTH_UNKNONW = "round_length_unknown"
 
 
 # Division of the match
